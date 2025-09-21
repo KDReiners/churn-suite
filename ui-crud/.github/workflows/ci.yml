@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate HTML exists
+        run: |
+          test -f index.html || (echo "index.html fehlt" && exit 1)
+      - name: List assets
+        run: |
+          find . -maxdepth 2 -type f -name "*.{html,css,js}" -print || true
+

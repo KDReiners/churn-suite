@@ -1,0 +1,8 @@
+body { font-size: 0.95rem; }
+.navbar .navbar-brand { font-weight: 600; }
+#sqlEditor { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.table-responsive { overflow-x: auto; }
+.list-group-item .table-link { cursor: pointer; }
+.list-group-item .table-link:hover { text-decoration: underline; }
+
+

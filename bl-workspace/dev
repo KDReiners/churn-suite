@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+if [[ -f .env ]]; then set -a; source .env; set +a; fi
+
+usage(){ cat <<U
+Usage: $0 <command> [args]
+  up       # start mgmt + crud
+  mgmt     # start managementstudio
+  crud     # start static CRUD server
+  churn    # run churn auto processor (use ARGS via Makefile)
+  down     # shutdown mgmt + crud (kill ports)
+  open     # open browser tabs for mgmt + crud
+  env      # print env
+U
+}
+cmd=${1:-}; shift || true
+
+case "$cmd" in
+  up)   "$0" mgmt & "$0" crud & wait ;;
+  mgmt) export MGMT_OUTBOX_ROOT="${OUTBOX_ROOT}"; export MGMT_CHURN_DB_PATH="${BL_CHURN_DIR}/dynamic_system_outputs/churn_database.json"; cd "${UI_MGMT_DIR}" && source .venv/bin/activate && python app.py ;;
+  crud) cd "${UI_CRUD_DIR}" && python3 -m http.server 8080 ;;
+  churn) export PYTHONPATH="${BL_CHURN_DIR}:${BL_COX_DIR}:${BL_CF_DIR}:${JSON_DB_DIR}:${PYTHONPATH:-}"; cd "${BL_CHURN_DIR}" && source .venv/bin/activate; python bl/Churn/churn_auto_processor.py ${*:-} ;;
+  down|shutdown)
+    # Beende Prozesse auf Management Studio und CRUD Ports
+    kill_port() {
+      local PORT="$1"
+      local PIDS
+      PIDS=$(lsof -ti tcp:"${PORT}" 2>/dev/null || true)
+      if [[ -n "${PIDS}" ]]; then
+        echo "Stopping processes on port ${PORT}: ${PIDS}"
+        kill ${PIDS} 2>/dev/null || true
+        sleep 1
+        PIDS=$(lsof -ti tcp:"${PORT}" 2>/dev/null || true)
+        if [[ -n "${PIDS}" ]]; then
+          echo "Force killing remaining on port ${PORT}: ${PIDS}"
+          kill -9 ${PIDS} 2>/dev/null || true
+        fi
+      else
+        echo "No process on port ${PORT}"
+      fi
+    }
+    kill_port "${MGMT_STUDIO_PORT:-5050}"
+    kill_port "${CRUD_PORT:-8080}"
+    ;;
+  open)
+    MS_PORT="${MGMT_STUDIO_PORT:-5050}"
+    CR_PORT="${CRUD_PORT:-8080}"
+    # Öffne Management Studio (SQL/CRUD je nach MGMT_DEFAULT_UI)
+    (open "http://127.0.0.1:${MS_PORT}/sql" >/dev/null 2>&1 || true)
+    # Öffne CRUD-Static Server
+    (open "http://localhost:${CR_PORT}/" >/dev/null 2>&1 || true)
+    echo "Opened: http://127.0.0.1:${MS_PORT}/sql and http://localhost:${CR_PORT}/"
+    ;;
+  env)  env | egrep "^(OUTBOX_ROOT|BL_|JSON_DB_DIR|UI_|MGMT_)" | sort ;;
+  *) usage; exit 1 ;;
+esac

@@ -1,0 +1,137 @@
+# Cursor Rules für dieses Projekt
+
+# ==============================
+# 1. Git & Commits
+# ==============================
+git:
+  flow: "GitHub Flow (Feature-Branch → PR → Squash-Merge in main → Tag via SemVer)"
+  squash_merge: true
+  enforce_semver: true
+  commit_messages: "Konvention: kurze prägnante Message, Englisch bevorzugt"
+  branch_naming: "feature/<name>, fix/<name>, chore/<name>"
+
+# ==============================
+# 2. Architektur
+# ==============================
+architecture:
+  separation_of_concerns: true     # jedes Modul eine Verantwortung
+  delegation_over_duplication: true
+  dal_usage: true                  # alle Datenzugriffe über DataAccessLayer
+  json_db_lineage: true            # Quellenregistrierung (z. B. stage0_cache)
+
+# ==============================
+# 3. Repository-Regeln
+# ==============================
+repository:
+  paths_via_projectpaths: true
+  no_mockdata: true
+  trash_folder_for_experiments: "trash_potential/"
+
+# ==============================
+# 4. Dokumentation
+# ==============================
+documentation:
+  readme_per_module: true
+  staleness_check: true
+  changelog_via_releases: true
+
+# ==============================
+# 5. Tooling
+# ==============================
+tooling:
+  makefile_shortcuts: true
+  allowed_shortcuts:
+    - "make ingest"
+    - "make stage0-auto"
+    - "make train"
+    - "make test"
+  lazy_imports: true
+  auto_ingestion_fallback: true
+
+# Cursor Rules für churn-suite
+
+Zuletzt geprüft: 2025-09-21
+
+## 1. Sprache & Darstellung
+- Antworten in Chat/Commits/PR-Beschreibungen grundsätzlich auf Deutsch.
+- Dateien, Verzeichnisse, Klassen- und Funktionsnamen in Englisch.
+- Klare, knappe Kommunikation; Bullet Points bevorzugt; Code nur in passenden Codeblöcken.
+- Dateinamen, Pfade, Funktionen und Klassen in Backticks formatieren.
+
+## 2. Git-Flow
+- Haupt-Branches: `main` (stabil), `develop` (Integration).
+- Kurzlebige Branches: `feature/<slug>`, `fix/<ticket>`, `chore/<task>`.
+- PRs: Pflicht-Review, kleine & thematisch fokussierte PRs, CI grün vor Merge.
+- Merge-Strategie: Squash-Merge in `develop` und `main`.
+- Releases: `release/x.y` → Freeze (nur Bugfixes) → Tag `vX.Y.Z` → Merge nach `main` und Backmerge nach `develop`.
+- Hotfix: `hotfix/x.y.z` von `main`, danach Backmerge nach `develop`.
+
+## 3. Architektur-Leitplanken
+- Separation of Concerns: Domänenlogik getrennt halten:
+  - Churn: `bl-churn/bl/Churn`
+  - Cox: `bl-cox/bl/Cox`
+  - Counterfactuals: `bl-counterfactuals/bl/Counterfactuals`
+- Infrastruktur & Datenzugriff separat: `*/config/`, `json-database/`.
+- UI separat: `ui-managementstudio/`.
+- Orchestrierer delegieren an spezialisierte Komponenten (Loader, Feature-Engine, Trainer, Evaluator).
+- Keine SQL- oder Dateisystem-Details in BL-Modulen; Nutzung über DAL/Interfaces.
+
+## 4. Code-Stil (Python)
+- Typisierung: Öffentliche Funktionen und APIs mit Type Hints versehen.
+- Benennung: Aussagekräftige, lange Namen (keine 1–2 Buchstaben), englisch.
+- Kontrollfluss: Guard Clauses, frühe Rückgaben, flache Verschachtelung.
+- Fehlerbehandlung: Kein „swallowing“ von Exceptions; Logging mit Kontext; gezielte `try/except`.
+- Kommentare: Nur für „Warum“, nicht „Wie“; Docstrings bei komplexer Logik.
+- Formatierung: Multiline statt komplexer Einzeiler; keine unnötigen Ternaries.
+- I/O: Keine Side-Effects bei Imports; Einstiegspunkte in `main`-Blöcken/Funktionen.
+
+## 5. Datenzugriff (MS SQL-Server) & DAL
+- Zugriff ausschließlich über den DAL:
+  - Beispielpfade: `bl-churn/config/data_access_layer.py`, `json-database/bl/json_database/sql_query_interface.py`.
+- Parameterisierte Queries; kein String-Konkatenations-SQL.
+- Keine Credentials im Code; ENV/Secrets nutzen. Konfiguration über `*/config/paths_config.py` und `*/config/shared/config/*.json`.
+- Keine Businesslogik in Datenzugriffsschichten.
+
+## 6. JSON-DB Richtlinien
+- Zweck: Zwischenergebnisse, Artefakt-Cache, schnelle Iteration.
+- Quelle der Wahrheit bleibt MS SQL-Server.
+- Nutzung über: `json-database/bl/json_database/churn_json_database.py`, `leakage_guard.py`.
+- Persistenzformate und Speicherorte über `*/config/shared/config/*.json` steuern.
+
+## 7. Tooling & Workflows
+- Makefile (zentral): `bl-workspace/Makefile` verwenden für Setup, Lint, Test, Run, Clean.
+- Ingestion: `bl-input/input_ingestion.py` (konfigurierbar über `*/config/paths_config.py`).
+- Lazy Imports: Schwere/optionale Pakete per `importlib` erst bei Bedarf laden.
+- Logging statt `print`; strukturierte Logs mit Leveln und Kontext.
+
+## 8. Dokumentation
+- README pro Modul: Zweck, Architektur-Skizze, Setup/Runs, Konfiguration, typische Fehler.
+- RUNBOOKs für Betrieb in Kernmodulen.
+- Staleness-Check: Kopf jeder README mit „Last reviewed: YYYY-MM-DD“. Review mindestens monatlich.
+- Code-Zitate: Pfade in Backticks angeben.
+
+## 9. Pfad- & Repository-Regeln
+- Zentrale Pfadsteuerung: `*/config/paths_config.py`. Keine hartkodierten relativen Pfade in BL.
+- Absolutpfade in Scripts/CI bevorzugen (Reproduzierbarkeit).
+- Keine produktionsähnlichen Mockdaten im Repo (keine CSV/SQL-Dumps). Fixtures nur generativ/temporär.
+- Trash-Ordner: Temporäres in `/trash/` (mit `.gitkeep`), von CI ignoriert; regelmäßige Bereinigung.
+- Änderungen in `*/shared/config` nur per PR, mit Versionierung und Release Notes.
+
+## 10. Sicherheit & Compliance
+- Secrets ausschließlich über ENV/Secret-Manager.
+- Sensible Daten niemals in Logs, PRs oder Issues.
+- SQL- und Dateioperationen auditierbar halten; Input-Validierung und Escaping.
+
+## 11. Cursor-spezifische Regeln
+- Antworten: Deutsch; prägnant; nur relevante Abschnitte in Markdown formatieren.
+- Code nur bei Bedarf und korrekt gefenced; keine vollständigen Nachrichten als Codeblock.
+- Bei Pfaden/Funktionen/Dateien Backticks verwenden.
+- Bei mehrschrittigen Implementierungen: Aufgaben strukturieren (Todo/Plan), dann ausführen.
+- Keine Zustimmung abwarten, wenn Infos vorliegen; Blocker aktiv adressieren.
+
+## 12. Qualitätssicherung
+- Linting/Tests vor PR-Abgabe; CI muss grün sein.
+- Messbare Akzeptanzkriterien pro Story; reproducible runs.
+- Artefakte und Modelle deterministisch versionieren (SemVer/Tags; Pfade über Configs).
+
+
