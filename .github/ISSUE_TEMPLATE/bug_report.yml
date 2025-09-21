@@ -1,0 +1,61 @@
+name: Bug Report
+description: Melde einen Fehler
+title: "bug: <kurzer titel>"
+labels: [bug]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bitte fülle alle relevanten Abschnitte kurz und prägnant aus.
+  - type: input
+    id: scope
+    attributes:
+      label: Modul/Scope
+      description: bl-churn, bl-cox, bl-counterfactuals, json-database, ui-managementstudio, ui-crud
+      placeholder: z. B. bl-churn
+  - type: textarea
+    id: description
+    attributes:
+      label: Beschreibung
+      description: Was ist passiert? Erwartetes vs. tatsächliches Verhalten.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Schritte zur Reproduktion
+      placeholder: 1) ... 2) ... 3) ...
+  - type: input
+    id: env
+    attributes:
+      label: Umgebung
+      placeholder: macOS 14.x, Python 3.11, DuckDB 1.0, ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/Output
+      render: shell
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Schweregrad
+      options:
+        - low
+        - medium
+        - high
+        - critical
+    validations:
+      required: true
+  - type: textarea
+    id: workarounds
+    attributes:
+      label: Bekannte Workarounds
+  - type: checkboxes
+    id: docs
+    attributes:
+      label: Dokumentation
+      options:
+        - label: In passendem RUNBOOK Known Issues verlinkt/aktualisiert
+        - label: Falls relevant, `KNOWN_ISSUES.md` aktualisiert
+

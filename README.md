@@ -76,6 +76,54 @@ Zuletzt geprüft: 2025-09-21
   - Management UI: `ui-managementstudio/app.py`, Assets unter `static/`, Templates unter `templates/`
   - SQL-Ansichten/Demos in `templates/sql.html` (nur nicht-sensible Queries)
 
+### 6) Quick Start (konsistent)
+
+```bash
+# Projekt-Workspace
+cd /Users/klaus.reiners/Projekte/churn-suite/bl-workspace
+
+# Management Studio starten und öffnen
+make mgmt
+make open
+
+# Churn Auto-Processor (Status/Validate/Run)
+make churn ARGS="--status"
+make churn ARGS="--validate"
+make churn
+
+# Cox direkt (siehe Modul-README)
+source /Users/klaus.reiners/Projekte/churn-suite/bl-cox/.venv/bin/activate
+cd /Users/klaus.reiners/Projekte/churn-suite/bl-cox
+python bl/Cox/cox_auto_processor.py --status
+
+# Counterfactuals direkt (siehe Modul-README)
+source /Users/klaus.reiners/Projekte/churn-suite/bl-counterfactuals/.venv/bin/activate
+cd /Users/klaus.reiners/Projekte/churn-suite/bl-counterfactuals
+python bl/Counterfactuals/counterfactuals_cli.py --experiment-id 1 --sample 0.2
+
+# SQL-Abfragen über JSON-DB
+source /Users/klaus.reiners/Projekte/churn-suite/json-database/.venv/bin/activate
+cd /Users/klaus.reiners/Projekte/churn-suite/json-database
+python bl/json_database/query_churn_database.py "SELECT * FROM experiments ORDER BY experiment_id DESC LIMIT 5"
+```
+
+### 7) Runbooks
+
+- bl-churn: [bl-churn/RUNBOOK.md](bl-churn/RUNBOOK.md)
+- bl-cox: [bl-cox/RUNBOOK.md](bl-cox/RUNBOOK.md)
+- bl-counterfactuals: [bl-counterfactuals/RUNBOOK.md](bl-counterfactuals/RUNBOOK.md)
+- json-database: [json-database/RUNBOOK.md](json-database/RUNBOOK.md)
+
+Hinweis: Offene Themen werden als „Known Issues“ im jeweiligen RUNBOOK gepflegt. Bitte neue Punkte dort ergänzen.
+
+Zentrales Board: [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
+
+Template für Einträge:
+```markdown
+## Known Issues
+- <Kurzbeschreibung> – Status: <offen/in Bearbeitung>; Impact: <niedrig/mittel/hoch>; Workaround: <falls vorhanden>; Owner: <Name>; Target-Date: <YYYY-MM-DD>
+```
+
 ### Zusammenspiel (High-Level Flow)
 - **Input**: `bl-input` lädt Daten aus MS SQL (DAL) → optional `json-database` Cache
 - **Domänen-Pipelines**:

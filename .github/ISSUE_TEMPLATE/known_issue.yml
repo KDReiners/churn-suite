@@ -1,0 +1,36 @@
+name: Known Issue
+description: Dokumentiere ein bekanntes Thema/Limitierung
+title: "known-issue: <kurzer titel>"
+labels: [known-issue]
+assignees: []
+body:
+  - type: input
+    id: scope
+    attributes:
+      label: Modul/Scope
+      placeholder: z. B. json-database
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Beschreibung
+      description: Kurzbeschreibung, Impact, aktueller Status
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Owner/Ansprechpartner
+  - type: input
+    id: target
+    attributes:
+      label: Zieltermin (YYYY-MM-DD)
+  - type: checkboxes
+    id: linkage
+    attributes:
+      label: Verlinkungen
+      options:
+        - label: In passendem RUNBOOK unter „Known Issues“ ergänzt
+        - label: In `KNOWN_ISSUES.md` ergänzt
+
