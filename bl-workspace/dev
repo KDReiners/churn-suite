@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SEALED: Ingestion-Orchestrator. Änderungen nur nach expliziter Rückfrage und architektonischer Prüfung.
 set -euo pipefail
 cd "$(dirname "$0")"
 if [[ -f .env ]]; then set -a; source .env; set +a; fi
@@ -47,6 +48,17 @@ case "$cmd" in
   crud) cd "${UI_CRUD_DIR}" && python3 -m http.server 8080 ;;
   churn) export PYTHONPATH="${BL_CHURN_DIR}:${BL_COX_DIR}:${BL_CF_DIR}:${JSON_DB_DIR}:${PYTHONPATH:-}"; cd "${BL_CHURN_DIR}" && source .venv/bin/activate; python bl/Churn/churn_auto_processor.py ${*:-} ;;
   ingest)
+    # Optionale Argumente parsen (z. B. --override <filename>)
+    OVERRIDE_FILE=""
+    while [[ ${1:-} ]]; do
+      case "$1" in
+        --override)
+          OVERRIDE_FILE="${2:-}"
+          shift 2 || true
+          ;;
+        *) shift || true ;;
+      esac
+    done
     # Ermittele Repo-Root relativ zu bl-workspace, ohne .env-Abhängigkeit
     REPO_ROOT="$(cd .. && pwd)"
     BL_INPUT_DIR="${REPO_ROOT}/bl-input"
@@ -63,8 +75,9 @@ case "$cmd" in
     # Stelle Ausgabeverzeichnisse sicher
     mkdir -p "${BL_CHURN_DIR}/dynamic_system_outputs/stage0_cache" "${BL_CHURN_DIR}/dynamic_system_outputs/outbox"
 
-    python - <<'PY'
+    OVERRIDE_FILE="$OVERRIDE_FILE" python - <<'PY'
 import sys
+import os
 from pathlib import Path
 repo_root = Path(__file__).resolve().parents[1]
 sys.path.extend([
@@ -72,17 +85,42 @@ sys.path.extend([
     str(repo_root / 'bl-churn'),
     str(repo_root / 'json-database'),
 ])
+os.environ['OUTBOX_ROOT'] = str(repo_root / 'dynamic_system_outputs' / 'outbox')
 from input_ingestion import InputIngestionService
+from bl.json_database.churn_json_database import ChurnJSONDatabase
 
 service = InputIngestionService()
-csvs = [
-    repo_root / 'bl-input' / 'input_data' / 'churn_Data_cleaned.csv',
-    repo_root / 'bl-input' / 'input_data' / 'ChurnData_20250831.csv',
-]
-for p in csvs:
-    sp, res = service.ingest_csv_to_stage0(p, register_in_json_db=True, export_to_outbox=True)
+csv_dir = repo_root / 'bl-input' / 'input_data'
+all_csvs = sorted([p for p in csv_dir.glob('*.csv')])
+
+# Files-Registry laden und bereits registrierte input_data-Dateien ermitteln
+db = ChurnJSONDatabase()
+files_tbl = (db.data.get('tables', {}).get('files', {}).get('records', []) or [])
+registered_input = { (r.get('file_name') or '') for r in files_tbl if (r.get('source_type') or '').lower() == 'input_data' }
+
+override = os.environ.get('OVERRIDE_FILE') or ''
+override = override.strip()
+
+for p in all_csvs:
+    name = p.name
+    is_override = (override and name == override)
+    is_new = (name not in registered_input)
+    if not (is_new or is_override):
+        continue
+    sp, res = service.ingest_csv_to_stage0(
+        p,
+        force_reanalysis=bool(is_override),
+        register_in_json_db=bool(is_new),  # vermeide doppelte input_data-Registrierungen
+        export_to_outbox=True,
+    )
     print('Stage0:', sp)
     print('Outbox:', res.get('outbox_path'))
+
+# Union-Import in rawdata
+print('Importing Outbox Stage0 → rawdata (union, replace=True) ...')
+db.import_from_outbox_stage0_union(replace=True)
+db.save()
+print('Done.')
 PY
     ;;
   down|shutdown)

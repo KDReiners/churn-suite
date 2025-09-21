@@ -7,4 +7,4 @@ churn: ; ./dev churn $(ARGS)
 env:   ; ./dev env
 down:  ; ./dev down
 open:  ; ./dev open
-ingest: ; ./dev ingest
+ingest: ; ./dev ingest $(ARGS)

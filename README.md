@@ -44,7 +44,7 @@ Zuletzt geprüft: 2025-09-21
   - CI ignoriert `/trash/`; regelmäßige Bereinigung
 - **Konfigurationsdisziplin**:
   - Änderungen an `*/shared/config` per PR, Versionierung via Tags/Release-Notes
-  - Sensible Daten nur via Secrets/ENV, nie in Git
+  - SENSITIVE Daten nur via Secrets/ENV, nie in Git
 
 ### 4) Dokumentations-Regeln
 - **README pro Modul**:
@@ -60,24 +60,12 @@ Zuletzt geprüft: 2025-09-21
 
 ### 5) Tooling
 - **Makefile-Shortcuts** (zentral in `bl-workspace/Makefile`):
-  - `make setup`: Environment/Dependencies installieren
-  - `make lint` / `make test`: Qualitäts-Gates
-  - `make run-<modul>`: Standard-Entry-Points starten (z. B. Churn/Cox)
-  - `make clean` / `make data-clean`: Artefakte bereinigen
-- **Ingestion (Stage0 + Outbox)**:
-  - `cd bl-workspace && make ingest` → verarbeitet die zwei Standard-CSV-Dateien aus `bl-input/input_data/` mit Python 3.11-venv (`.venv311`), legt Stage0-JSONs an und exportiert sie in die Outbox.
-  - Outbox-Steuerung über `OUTBOX_ROOT` (ENV). Fallback: `bl-churn/dynamic_system_outputs/outbox`.
-- **Auto-Ingestion**:
-  - Ingestion-Einstieg: `bl-input/input_ingestion.py`
-  - Zielt auf MS SQL-Server via DAL; optionales Schreiben in `json-database` für Caching
-  - Konfigurierbar über `*/config/paths_config.py` und `*/shared/config/*.json`
-- **Lazy Import (Performance/Optionalität)**:
-  - Schwere/optionale Pakete erst bei Bedarf laden (z. B. via `importlib` innerhalb von Funktionen)
-  - Feature-Gates über Configs; klarer Fallback, wenn Optionals fehlen
-  - Startskripte vermeiden globale Side-Effects beim Import
-- **UI-Tools**:
-  - Management UI: `ui-managementstudio/app.py`, Assets unter `static/`, Templates unter `templates/`
-  - SQL-Ansichten/Demos in `templates/sql.html` (nur nicht-sensible Queries)
+  - `make ingest`: CSV→Stage0→Outbox→rawdata (Union, replace). Nimmt alle CSVs in `bl-input/input_data/`, die noch nicht in `files` registriert sind. Optional: `ARGS="--override <Dateiname.csv>"` erzwingt Neu-Ingestion einer bestimmten Datei.
+  - `make mgmt` / `make open`: Management Studio starten/öffnen
+  - `make down`: Ports bereinigen
+  - `make churn ARGS="..."`: Churn-Auto-Processor
+- **Outbox-Steuerung**:
+  - `OUTBOX_ROOT` (ENV), Fallback: `bl-churn/dynamic_system_outputs/outbox`
 
 ### 6) Quick Start (konsistent)
 
@@ -85,32 +73,14 @@ Zuletzt geprüft: 2025-09-21
 # Projekt-Workspace
 cd /Users/klaus.reiners/Projekte/churn-suite/bl-workspace
 
-# Input-Ingestion (CSV → Stage0 + Outbox)
+# Ingestion (alle neuen CSVs)
 make ingest
+# Override eines einzelnen Files
+make ingest ARGS="--override ChurnData_20250831.csv"
 
 # Management Studio starten und öffnen
 make mgmt
 make open
-
-# Churn Auto-Processor (Status/Validate/Run)
-make churn ARGS="--status"
-make churn ARGS="--validate"
-make churn
-
-# Cox direkt (siehe Modul-README)
-source /Users/klaus.reiners/Projekte/churn-suite/bl-cox/.venv/bin/activate
-cd /Users/klaus.reiners/Projekte/churn-suite/bl-cox
-python bl/Cox/cox_auto_processor.py --status
-
-# Counterfactuals direkt (siehe Modul-README)
-source /Users/klaus.reiners/Projekte/churn-suite/bl-counterfactuals/.venv/bin/activate
-cd /Users/klaus.reiners/Projekte/churn-suite/bl-counterfactuals
-python bl/Counterfactuals/counterfactuals_cli.py --experiment-id 1 --sample 0.2
-
-# SQL-Abfragen über JSON-DB
-source /Users/klaus.reiners/Projekte/churn-suite/json-database/.venv/bin/activate
-cd /Users/klaus.reiners/Projekte/churn-suite/json-database
-python bl/json_database/query_churn_database.py "SELECT * FROM experiments ORDER BY experiment_id DESC LIMIT 5"
 ```
 
 ### 7) Runbooks
@@ -120,25 +90,7 @@ python bl/json_database/query_churn_database.py "SELECT * FROM experiments ORDER
 - bl-counterfactuals: [bl-counterfactuals/RUNBOOK.md](bl-counterfactuals/RUNBOOK.md)
 - json-database: [json-database/RUNBOOK.md](json-database/RUNBOOK.md)
 
-Hinweis: Offene Themen werden als „Known Issues“ im jeweiligen RUNBOOK gepflegt. Bitte neue Punkte dort ergänzen.
-
-Zentrales Board: [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
-
-Template für Einträge:
-```markdown
-## Known Issues
-- <Kurzbeschreibung> – Status: <offen/in Bearbeitung>; Impact: <niedrig/mittel/hoch>; Workaround: <falls vorhanden>; Owner: <Name>; Target-Date: <YYYY-MM-DD>
-```
-
-### Zusammenspiel (High-Level Flow)
-- **Input**: `bl-input` lädt Daten aus MS SQL (DAL) → optional `json-database` Cache
-- **Domänen-Pipelines**:
-  - Churn: `bl-churn/bl/Churn/*` (Load → Feature → Train → Evaluate → Persist)
-  - Cox: `bl-cox/bl/Cox/*` analoger Ablauf
-  - Counterfactuals: `bl-counterfactuals/bl/Counterfactuals/*` konsumiert Modelle/Features
-- **Konfiguration**: Einheitlich aus `*/config/` + `*/shared/config/*.json`
-- **Persistenz**: Ergebnisse in SQL und/oder JSON-DB; UI liest für Einsicht
-- **Betrieb**: Steuerung via Makefile-Targets; Dokumentation in READMEs/RUNBOOKs
-- **Governance**: Änderungen per PR/Squash; Releases getaggt; Docs aktuell halten
+### 8) Sealed-Komponenten
+- Ingestion-Orchestrator (`bl-workspace/dev`, Target `ingest`) ist SEALED. Änderungen nur nach expliziter Rückfrage und architektonischer Prüfung.
 
 
