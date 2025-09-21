@@ -74,6 +74,31 @@
     });
   }
 
+  async function loadOutbox() {
+    try {
+      const data = await fetchJSON('/outbox/info');
+      const root = document.getElementById('outboxRoot');
+      const list = document.getElementById('outboxList');
+      if (root) root.textContent = (data.stage0_dir || data.outbox_root || '') + '';
+      if (list) {
+        list.innerHTML = '';
+        (data.files || []).forEach(f => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item d-flex justify-content-between align-items-center';
+          li.innerHTML = `<span class="outbox-file" title="${f.path}">${f.name}</span><span class="badge bg-secondary">${(f.size||0)}</span>`;
+          li.querySelector('.outbox-file').addEventListener('click', () => {
+            const editor = document.getElementById('sqlEditor');
+            editor.value = 'SELECT * FROM files ORDER BY dt_inserted DESC LIMIT 50;';
+            editor.focus();
+          });
+          list.appendChild(li);
+        });
+      }
+    } catch (e) {
+      // Outbox optional – kein harter Fehler
+    }
+  }
+
   function renderSchemaBox(data) {
     const box = document.getElementById('schemaBox');
     const fields = data.schema || [];
@@ -276,6 +301,8 @@
       try { await runQuery(); } catch(e) { showError(String(e.message || e)); }
     });
     document.getElementById('refreshTables').addEventListener('click', loadTables);
+    const btnRO = document.getElementById('refreshOutbox');
+    if (btnRO) btnRO.addEventListener('click', loadOutbox);
     const btnRV = document.getElementById('refreshViews');
     if (btnRV) btnRV.addEventListener('click', loadViews);
     const btnSave = document.getElementById('saveView');
@@ -285,6 +312,7 @@
     bindKeys();
     loadTables();
     loadViews();
+    loadOutbox();
   }
 
   document.addEventListener('DOMContentLoaded', init);

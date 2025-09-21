@@ -20,6 +20,16 @@
       <div class="row g-2">
         <!-- Left: Tables -->
         <div class="col-12 col-lg-3">
+          <div class="card mb-2">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <strong>Stage0 Outbox</strong>
+              <button id="refreshOutbox" class="btn btn-sm btn-outline-secondary">Neu laden</button>
+            </div>
+            <div class="card-body p-2 small" style="max-height: 20vh; overflow: auto;">
+              <div class="mb-1"><code id="outboxRoot">…</code></div>
+              <ul id="outboxList" class="list-group list-group-flush"></ul>
+            </div>
+          </div>
           <div class="card">
             <div class="card-header d-flex align-items-center justify-content-between">
               <strong>Tabellen</strong>

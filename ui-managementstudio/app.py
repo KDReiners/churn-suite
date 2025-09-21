@@ -1088,6 +1088,40 @@ def run_query():
 
 
 # -----------------------------
+# Outbox Info (Stage0 quick access)
+# -----------------------------
+
+@app.route("/outbox/info", methods=["GET"])
+def outbox_info():
+    try:
+        base = ProjectPaths.outbox_directory()
+        stage0 = (base / "stage0_cache").resolve()
+        files = []
+        if stage0.exists():
+            # Jüngste zuerst (max 20)
+            items = sorted(stage0.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:20]
+            for p in items:
+                try:
+                    st = p.stat()
+                    files.append({
+                        "name": p.name,
+                        "path": str(p),
+                        "size": st.st_size,
+                        "mtime": st.st_mtime
+                    })
+                except Exception:
+                    files.append({"name": p.name, "path": str(p)})
+        return jsonify({
+            "outbox_root": str(base),
+            "stage0_dir": str(stage0),
+            "files": files,
+            "count": len(files)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# -----------------------------
 # CLI Stored Procedures Endpoints
 # -----------------------------
 
