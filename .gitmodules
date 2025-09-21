@@ -1,0 +1,16 @@
+[submodule "bl-churn"]
+	path = bl-churn
+	url = https://github.com/KDReiners/bl-churn.git
+	branch = main
+[submodule "bl-cox"]
+	path = bl-cox
+	url = https://github.com/KDReiners/bl-cox.git
+	branch = main
+[submodule "bl-counterfactuals"]
+	path = bl-counterfactuals
+	url = https://github.com/KDReiners/bl-counterfactuals.git
+	branch = main
+[submodule "json-database"]
+	path = json-database
+	url = https://github.com/KDReiners/json-database.git
+	branch = main
