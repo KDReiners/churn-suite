@@ -1,0 +1,36 @@
+name: Feature Request
+description: Schlage eine neue Funktion/Verbesserung vor
+title: "feat: <kurzer titel>"
+labels: [enhancement]
+assignees: []
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Zusammenfassung
+      description: Kurzbeschreibung des gewünschten Features und des Nutzens
+    validations:
+      required: true
+  - type: input
+    id: scope
+    attributes:
+      label: Modul/Scope
+      placeholder: z. B. bl-cox
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Akzeptanzkriterien
+      description: Messbare Kriterien (z. B. Performance-Ziele, UI-Verhalten)
+      placeholder: "- ..."
+  - type: textarea
+    id: design
+    attributes:
+      label: Architektur/Design (optional)
+  - type: checkboxes
+    id: docs
+    attributes:
+      label: Dokumentation
+      options:
+        - label: README/Runbook wird aktualisiert
+        - label: Config-/Schema-Änderungen werden dokumentiert
+

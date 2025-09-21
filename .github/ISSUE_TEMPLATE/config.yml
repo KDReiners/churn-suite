@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Runbooks & Known Issues
+    url: https://github.com/KDReiners/churn-suite/blob/main/README.md#7-runbooks
+    about: Bitte prüfe die Runbooks und `KNOWN_ISSUES.md` vor dem Anlegen eines neuen Issues.
+
