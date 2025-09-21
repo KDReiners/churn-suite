@@ -2,6 +2,8 @@ Last reviewed: 2025-09-21
 
 # Input System - Business Logic Module
 
+> SEALEDCOMPONENT: Ingestion-Flow gilt als stabil. Änderungen nur nach expliziter Rückfrage und architektonischer Prüfung.
+
 ```yaml
 module_info:
   name: "Input business logic module"
@@ -78,6 +80,12 @@ python -c "from bl_input_run import run; run()"  # siehe Programmatic API unten
 ```bash
 # Lädt Stage0; erzeugt sie automatisch aus der neuesten CSV, falls nicht vorhanden
 python -c "from config.data_access_layer import load_latest_stage0_data; df=load_latest_stage0_data(); print(df.shape)"
+```
+
+### **End-to-End Ingestion → JSON-DB rawdata (Union)**
+```bash
+# Führt CSV→Stage0→Outbox und danach Outbox→rawdata (Union, replace) aus
+make -C bl-workspace ingest
 ```
 
 ### **Programmatic API:**
@@ -164,22 +172,12 @@ python_version_conflicts:
   solution: "Repo-venv mit Python 3.11 verwenden (.venv311); Versionen: pandas 2.0.3, numpy 1.26.4, scikit-learn 1.3.2"
 ```
 
-## 📋 **AI-AGENT MAINTENANCE CHECKLIST**
-
-### **After Code Changes:**
-```yaml
-validation_steps:
-  - "Test: Basic functionality with sample data"
-  - "Verify: All dependencies still accessible"
-  - "Check: Integration points function correctly"
-  - "Validate: Performance within expected ranges"
-
-update_requirements:
-  - "API changes → Update programmatic examples in this README"
-  - "Performance changes → Update metrics section"
-  - "New dependencies → Update dependencies section"
-  - "Configuration changes → Update config examples"
-```
+## 🧱 **Data Dictionary Typregeln (wirksam ab Stage0)**
+- `Kunde`: INTEGER
+- `i_*`: INTEGER, Ausnahme `i_Alive`: BOOLEAN
+- `I_TIMEBASE`: INTEGER (Format YYYYMM)
+- `n_*`: DOUBLE (float)
+- Typen werden über `json-database/config/shared/config/data_dictionary_optimized.json` bestimmt und zur Laufzeit nicht erzwungen gecastet.
 
 ---
 
