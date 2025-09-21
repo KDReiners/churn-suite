@@ -26,6 +26,21 @@ Kurzübersicht offener Themen über alle Module hinweg. Detaillierte Pflege erfo
 - Logs nur In-Memory – optionales File-Logging
 - Validierung Experiments-CRUD erweitern
 
+#### 2025-09-21 – CRUD/Runner-Integration und Pfade
+- Symptome:
+  - Route `/crud` zeitweise 404; statische Assets nicht geladen
+  - „Run Churn“ scheitert mit `ModuleNotFoundError: joblib` (fehlende ML-Deps im UI-venv)
+  - Wiederkehrend `AttributeError: ProjectPaths.ui_settings_file` (mehrere `ProjectPaths`-Klassen/Importpfade)
+  - Lock-Datei `churn_database.json.lock` blockiert Folgeprozesse nach Fehlern
+- Ursachen:
+  - Uneinheitliche `sys.path`-Reihenfolge (Submodule), doppelte `ProjectPaths`-Definitionen, fehlende Abhängigkeiten im UI-venv
+  - Inkonsequente Pfadauflösung (relativ zu `bl-churn` vs. relativ zum Management Studio)
+- Workaround (kurzfristig):
+  - ENV setzen: `UI_SETTINGS_PATH` → `bl-churn/config/shared/config/ui_settings.json`
+  - BL-Requirements im UI-venv installieren (joblib, scikit-learn, scipy)
+  - Lock-Datei bei Fehlern entfernen und Abbruch kommunizieren
+- Empfehlung (mittel-/langfristig): siehe `CRUD_REWRITE_PLAN.md` (separater Runner-Service + schlanke UI)
+
 ### ui-crud
 - Kein HTTPS/Basic-Auth – nur lokal
 - Kein Asset-Build – Bedarf bei größeren UIs
