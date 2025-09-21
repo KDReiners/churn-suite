@@ -22,6 +22,7 @@ Responsibilities:
 - CSV-Hashing/Analyse delegiert an Step0 (keine Duplikation)
 - Erzeugte Stage0-Datei lokalisieren (`stage0_cache/<hash>.json`)
 - Optional: Registrierung in JSON-DB (Files-Tabelle)
+ - Optional: Export der Stage0-JSON in die Outbox (`outbox/stage0_cache/`)
 
 ### **Business Impact:**
 - **Input business functionality
@@ -52,16 +53,25 @@ output:
   - "Performance metrics and logs"
 ```
 
-## 🚀 **QUICK START FOR AI-AGENTS**
+## 🚀 **QUICK START**
 
-### **Basic Usage (direct ingestion):**
+### **Setup (empfohlen: Python 3.11 venv)**
 ```bash
-# Environment setup
-source churn_prediction_env/bin/activate
-cd /Users/klaus.reiners/Projekte/Cursor\ ChurnPrediction\ -\ Reengineering
+cd /Users/klaus.reiners/Projekte/churn-suite
+python3.11 -m venv .venv311
+source .venv311/bin/activate
+pip install -U pip
+pip install pandas==2.0.3 numpy==1.26.4 scikit-learn==1.3.2 duckdb==1.0.0
 
-# Ingestion der neuesten CSV → Stage0 (mit JSON-DB-Registrierung)
-python -c "from bl.Input import ingest_csv_to_stage0; from config.paths_config import ProjectPaths as P; p=P.main_churn_data_file(); print(ingest_csv_to_stage0(p, register_in_json_db=True)[0])"
+# optional: Ausgabeverzeichnisse sicherstellen
+mkdir -p bl-churn/dynamic_system_outputs/stage0_cache bl-churn/dynamic_system_outputs/outbox
+```
+
+### **Direkte Ingestion einer CSV → Stage0 (+Outbox)**
+```bash
+cd /Users/klaus.reiners/Projekte/churn-suite
+source .venv311/bin/activate
+python -c "from bl_input_run import run; run()"  # siehe Programmatic API unten
 ```
 
 ### **Alternative (über DataAccessLayer mit Auto-Ingestion):**
@@ -72,13 +82,35 @@ python -c "from config.data_access_layer import load_latest_stage0_data; df=load
 
 ### **Programmatic API:**
 ```python
-from bl.Input.input_ingestion import InputIngestionService
+from pathlib import Path
+from input_ingestion import InputIngestionService
 
 # Initialize component
 service = InputIngestionService()
-stage0_path, results = service.ensure_stage0_for_latest_input(register_in_json_db=True)
+
+# Konkrete CSV verarbeiten
+stage0_path, results = service.ingest_csv_to_stage0(
+    csv_path=Path("/Users/klaus.reiners/Projekte/churn-suite/bl-input/input_data/churn_Data_cleaned.csv"),
+    register_in_json_db=True,
+    export_to_outbox=True,
+)
 print(stage0_path)
+print(results.get("outbox_path"))
+
+# Optional: kleiner Runner für CLI-ähnlichen Aufruf
+def run():
+    s = InputIngestionService()
+    p1 = Path("/Users/klaus.reiners/Projekte/churn-suite/bl-input/input_data/churn_Data_cleaned.csv")
+    p2 = Path("/Users/klaus.reiners/Projekte/churn-suite/bl-input/input_data/ChurnData_20250831.csv")
+    for p in (p1, p2):
+        sp, res = s.ingest_csv_to_stage0(p, register_in_json_db=True, export_to_outbox=True)
+        print(sp)
+        print(res.get("outbox_path"))
 ```
+
+### **Outputs:**
+- Stage0 Cache: `bl-churn/dynamic_system_outputs/stage0_cache/<csv_hash>.json`
+- Outbox Export (optional): `bl-churn/dynamic_system_outputs/outbox/stage0_cache/<csv_hash>.json`
 
 ## 📊 **CONFIGURATION & CONSTANTS**
 
@@ -117,7 +149,7 @@ performance_metrics:
 ```yaml
 configuration_errors:
   symptom: "Module fails to initialize"
-  solution: "Check config file paths and dependencies"
+  solution: "Check config file paths and dependencies; Python 3.11 venv aktiv; Dependencies installiert"
 
 data_processing_errors:
   symptom: "Processing fails with data errors"
@@ -126,6 +158,10 @@ data_processing_errors:
 integration_errors:
   symptom: "Database or external integration failures"
   solution: "Check connection parameters and permissions"
+  
+python_version_conflicts:
+  symptom: "pandas/numpy ImportError (z. B. unter Python 3.13)"
+  solution: "Repo-venv mit Python 3.11 verwenden (.venv311); Versionen: pandas 2.0.3, numpy 1.26.4, scikit-learn 1.3.2"
 ```
 
 ## 📋 **AI-AGENT MAINTENANCE CHECKLIST**

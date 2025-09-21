@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 from typing import Optional, Dict, Any, Tuple
 
 from config.paths_config import ProjectPaths
@@ -45,6 +46,7 @@ class InputIngestionService:
         csv_path: Path | str,
         force_reanalysis: bool = False,
         register_in_json_db: bool = True,
+        export_to_outbox: bool = True,
     ) -> Tuple[Optional[Path], Dict[str, Any]]:
         """
         Führt CSV→Stage0-Ingestion durch und gibt Pfad zur Stage0-Datei zurück.
@@ -78,11 +80,29 @@ class InputIngestionService:
         if register_in_json_db:
             try:
                 db = ChurnJSONDatabase()
+                # Registriere die ursprüngliche CSV-Datei
+                csv_filename = Path(csv_path).name
+                db.create_file_record(file_name=csv_filename, source_type="input_data")
+                # Registriere die Stage0-Datei
                 db.create_file_record(file_name=stage0_path.name, source_type="stage0_cache")
                 db.save()  # Persistiere Änderungen
             except Exception as e:
                 # Registrierung ist optional – Fehler nicht eskalieren, aber zurückmelden
                 results.setdefault("warnings", []).append(f"JSON-DB registration failed: {e}")
+
+        # Optional in Outbox kopieren
+        outbox_path: Optional[Path] = None
+        if export_to_outbox:
+            try:
+                outbox_dir = ProjectPaths.outbox_directory() / "stage0_cache"
+                ProjectPaths.ensure_directory_exists(outbox_dir)
+                outbox_path = outbox_dir / stage0_path.name
+                # Nur kopieren, wenn nicht bereits vorhanden oder Quelle neuer ist
+                if (not outbox_path.exists()) or (stage0_path.stat().st_mtime > outbox_path.stat().st_mtime):
+                    shutil.copy2(stage0_path, outbox_path)
+                results["outbox_path"] = str(outbox_path)
+            except Exception as e:
+                results.setdefault("warnings", []).append(f"Outbox export failed: {e}")
 
         return stage0_path, results
 

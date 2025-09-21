@@ -64,6 +64,9 @@ Zuletzt geprüft: 2025-09-21
   - `make lint` / `make test`: Qualitäts-Gates
   - `make run-<modul>`: Standard-Entry-Points starten (z. B. Churn/Cox)
   - `make clean` / `make data-clean`: Artefakte bereinigen
+- **Ingestion (Stage0 + Outbox)**:
+  - `cd bl-workspace && make ingest` → verarbeitet die zwei Standard-CSV-Dateien aus `bl-input/input_data/` mit Python 3.11-venv (`.venv311`), legt Stage0-JSONs an und exportiert sie in die Outbox.
+  - Outbox-Steuerung über `OUTBOX_ROOT` (ENV). Fallback: `bl-churn/dynamic_system_outputs/outbox`.
 - **Auto-Ingestion**:
   - Ingestion-Einstieg: `bl-input/input_ingestion.py`
   - Zielt auf MS SQL-Server via DAL; optionales Schreiben in `json-database` für Caching
@@ -81,6 +84,9 @@ Zuletzt geprüft: 2025-09-21
 ```bash
 # Projekt-Workspace
 cd /Users/klaus.reiners/Projekte/churn-suite/bl-workspace
+
+# Input-Ingestion (CSV → Stage0 + Outbox)
+make ingest
 
 # Management Studio starten und öffnen
 make mgmt

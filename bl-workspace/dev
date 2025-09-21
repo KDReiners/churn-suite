@@ -18,9 +18,73 @@ cmd=${1:-}; shift || true
 
 case "$cmd" in
   up)   "$0" mgmt & "$0" crud & wait ;;
-  mgmt) export MGMT_OUTBOX_ROOT="${OUTBOX_ROOT}"; export MGMT_CHURN_DB_PATH="${BL_CHURN_DIR}/dynamic_system_outputs/churn_database.json"; cd "${UI_MGMT_DIR}" && source .venv/bin/activate && python app.py ;;
+  mgmt)
+    # Ermittele Verzeichnisse relativ zum Repo-Root, unabhängig von .env
+    REPO_ROOT="$(cd .. && pwd)"
+    UI_MGMT_DIR="${REPO_ROOT}/ui-managementstudio"
+    BL_CHURN_DIR="${REPO_ROOT}/bl-churn"
+    JSON_DB_DIR="${REPO_ROOT}/json-database"
+    export MGMT_OUTBOX_ROOT="${BL_CHURN_DIR}/dynamic_system_outputs/outbox"
+    export MGMT_CHURN_DB_PATH="${BL_CHURN_DIR}/dynamic_system_outputs/churn_database.json"
+    cd "${UI_MGMT_DIR}"
+    # Sicherstellen, dass eine venv existiert
+    VENV_DIR="${UI_MGMT_DIR}/.venv"
+    PYTHON_BIN="${VENV_DIR}/bin/python3"
+    if [[ ! -d .venv ]]; then
+      python3.11 -m venv .venv
+      source .venv/bin/activate
+      pip install -U pip
+      if [[ -f requirements.txt ]]; then pip install -r requirements.txt; fi
+    else
+      source .venv/bin/activate
+    fi
+    # Pythonpfad für Module mit eigenem config/paths_config.py ergänzen
+    export PYTHONPATH="${BL_CHURN_DIR}:${JSON_DB_DIR}:${PYTHONPATH:-}"
+    # Stelle sicher, dass Dependencies vorhanden sind (Flask etc.)
+    if [[ -f requirements.txt ]]; then pip install -r requirements.txt >/dev/null 2>&1 || true; fi
+    "${PYTHON_BIN}" app.py
+    ;;
   crud) cd "${UI_CRUD_DIR}" && python3 -m http.server 8080 ;;
   churn) export PYTHONPATH="${BL_CHURN_DIR}:${BL_COX_DIR}:${BL_CF_DIR}:${JSON_DB_DIR}:${PYTHONPATH:-}"; cd "${BL_CHURN_DIR}" && source .venv/bin/activate; python bl/Churn/churn_auto_processor.py ${*:-} ;;
+  ingest)
+    # Ermittele Repo-Root relativ zu bl-workspace, ohne .env-Abhängigkeit
+    REPO_ROOT="$(cd .. && pwd)"
+    BL_INPUT_DIR="${REPO_ROOT}/bl-input"
+    BL_CHURN_DIR="${REPO_ROOT}/bl-churn"
+    JSON_DB_DIR="${REPO_ROOT}/json-database"
+    export PYTHONPATH="${BL_INPUT_DIR}:${BL_CHURN_DIR}:${JSON_DB_DIR}:${PYTHONPATH:-}"
+
+    # Stelle venv 3.11 sicher
+    if [[ ! -d "${REPO_ROOT}/.venv311" ]]; then
+      python3.11 -m venv "${REPO_ROOT}/.venv311"
+    fi
+    source "${REPO_ROOT}/.venv311/bin/activate"
+
+    # Stelle Ausgabeverzeichnisse sicher
+    mkdir -p "${BL_CHURN_DIR}/dynamic_system_outputs/stage0_cache" "${BL_CHURN_DIR}/dynamic_system_outputs/outbox"
+
+    python - <<'PY'
+import sys
+from pathlib import Path
+repo_root = Path(__file__).resolve().parents[1]
+sys.path.extend([
+    str(repo_root / 'bl-input'),
+    str(repo_root / 'bl-churn'),
+    str(repo_root / 'json-database'),
+])
+from input_ingestion import InputIngestionService
+
+service = InputIngestionService()
+csvs = [
+    repo_root / 'bl-input' / 'input_data' / 'churn_Data_cleaned.csv',
+    repo_root / 'bl-input' / 'input_data' / 'ChurnData_20250831.csv',
+]
+for p in csvs:
+    sp, res = service.ingest_csv_to_stage0(p, register_in_json_db=True, export_to_outbox=True)
+    print('Stage0:', sp)
+    print('Outbox:', res.get('outbox_path'))
+PY
+    ;;
   down|shutdown)
     # Beende Prozesse auf Management Studio und CRUD Ports
     kill_port() {
