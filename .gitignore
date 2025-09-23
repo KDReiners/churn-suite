@@ -1,1 +1,15 @@
 .DS_Store
+
+# Python venv
+.venv*/
+
+# Dynamic outputs and caches
+dynamic_system_outputs/**
+bl-churn/dynamic_system_outputs/**
+!/dynamic_system_outputs/.gitkeep
+!/bl-churn/dynamic_system_outputs/.gitkeep
+
+# IDE
+.vscode/
+*.log
+
