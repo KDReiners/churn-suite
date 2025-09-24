@@ -174,7 +174,7 @@ python_version_conflicts:
 
 ## 🧱 **Data Dictionary Typregeln (wirksam ab Stage0)**
 - `Kunde`: INTEGER
-- `i_*`: INTEGER, Ausnahme `i_Alive`: BOOLEAN
+- `i_*`: INTEGER (inkl. `I_Alive` als 1=alive, 0=churned)
 - `I_TIMEBASE`: INTEGER (Format YYYYMM)
 - `n_*`: DOUBLE (float)
 - Typen werden über `json-database/config/shared/config/data_dictionary_optimized.json` bestimmt und zur Laufzeit nicht erzwungen gecastet.

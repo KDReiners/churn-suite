@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Churn Suite - Pipeline Runner</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f7;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .content {
+            padding: 30px;
+        }
+        .pipeline-section {
+            margin-bottom: 40px;
+            padding: 25px;
+            border: 1px solid #e1e1e3;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .pipeline-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #1d1d1f;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #424245;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d2d2d7;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .btn {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #0056cc;
+        }
+        .btn:disabled {
+            background: #d2d2d7;
+            cursor: not-allowed;
+        }
+        .logs-section {
+            margin-top: 40px;
+            padding: 25px;
+            border: 1px solid #e1e1e3;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        .logs-container {
+            height: 300px;
+            overflow-y: auto;
+            background: #1d1d1f;
+            color: #f5f5f7;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+        }
+        .log-timestamp {
+            color: #8e8e93;
+        }
+        .log-info { color: #34c759; }
+        .log-error { color: #ff3b30; }
+        .log-warning { color: #ff9500; }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-idle { background: #8e8e93; }
+        .status-running { background: #ff9500; animation: pulse 1s infinite; }
+        .status-success { background: #34c759; }
+        .status-error { background: #ff3b30; }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Churn Suite Pipeline Runner</h1>
+            <p>Domain-driven ML Pipeline Orchestrierung</p>
+        </div>
+        
+        <div class="nav" style="padding: 20px 30px; border-bottom: 1px solid #e1e1e3; background: #fafafa;">
+            <a href="index.html" style="display: inline-block; padding: 10px 20px; margin-right: 10px; background: #007aff; color: white; text-decoration: none; border-radius: 6px; font-weight: 500;">Pipeline Runner</a>
+            <a href="experiments.html" style="display: inline-block; padding: 10px 20px; margin-right: 10px; background: #007aff; color: white; text-decoration: none; border-radius: 6px; font-weight: 500;">Experiment CRUD</a>
+        </div>
+        
+        <div class="content">
+            <!-- Experiment Selection -->
+            <div class="pipeline-section">
+                <div class="pipeline-title">Experiment auswählen</div>
+                <div class="form-group">
+                    <label for="experiment-select">Verfügbare Experimente</label>
+                    <select id="experiment-select" class="form-control">
+                        <option value="">Lade Experimente...</option>
+                    </select>
+                </div>
+                <div id="experiment-details" style="display: none; margin-top: 15px; padding: 15px; background: #f0f0f0; border-radius: 6px;">
+                    <h4>Experiment Details:</h4>
+                    <div id="experiment-info"></div>
+                </div>
+            </div>
+
+            <!-- Churn Pipeline -->
+            <div class="pipeline-section">
+                <div class="pipeline-title">
+                    <span class="status-indicator status-idle" id="churn-status"></span>
+                    Churn Prediction Pipeline
+                </div>
+                <form id="churn-form">
+                    <div class="form-group">
+                        <label for="churn-experiment-id">Experiment ID</label>
+                        <input type="number" id="churn-experiment-id" value="1" readonly style="background: #f5f5f5;">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="churn-training-from">Training From (YYYY-MM)</label>
+                            <input type="text" id="churn-training-from" value="2023-01" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="churn-training-to">Training To (YYYY-MM)</label>
+                            <input type="text" id="churn-training-to" value="2023-12" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="churn-test-from">Test From (YYYY-MM)</label>
+                            <input type="text" id="churn-test-from" value="2024-01" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="churn-test-to">Test To (YYYY-MM)</label>
+                            <input type="text" id="churn-test-to" value="2024-06" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="churn-test-mode">Testmodus (10% der Testkunden)</label>
+                        <input type="checkbox" id="churn-test-mode" />
+                    </div>
+                    <button type="submit" class="btn" id="churn-btn">Churn Pipeline starten</button>
+                </form>
+            </div>
+
+            <!-- Cox Pipeline -->
+            <div class="pipeline-section">
+                <div class="pipeline-title">
+                    <span class="status-indicator status-idle" id="cox-status"></span>
+                    Cox Survival Analysis Pipeline
+                </div>
+                <form id="cox-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cox-experiment-id">Experiment ID</label>
+                            <input type="number" id="cox-experiment-id" value="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cox-cutoff">Cutoff Exclusive (YYYY-MM)</label>
+                            <input type="text" id="cox-cutoff" value="2024-01" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn" id="cox-btn">Cox Pipeline starten</button>
+                </form>
+            </div>
+
+            <!-- Counterfactuals Pipeline -->
+            <div class="pipeline-section">
+                <div class="pipeline-title">
+                    <span class="status-indicator status-idle" id="cf-status"></span>
+                    Counterfactuals Pipeline
+                </div>
+                <form id="cf-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cf-experiment-id">Experiment ID</label>
+                            <input type="number" id="cf-experiment-id" value="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cf-sample">Sample Size (optional)</label>
+                            <input type="number" id="cf-sample" placeholder="Default: alle">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="cf-limit">Limit (optional)</label>
+                        <input type="number" id="cf-limit" placeholder="Default: unbegrenzt">
+                    </div>
+                    <button type="submit" class="btn" id="cf-btn">Counterfactuals Pipeline starten</button>
+                </form>
+            </div>
+
+            <!-- Live Logs -->
+            <div class="logs-section">
+                <div class="pipeline-title">Live Logs</div>
+                <div class="logs-container" id="logs-container">
+                    <div class="log-entry">
+                        <span class="log-timestamp">[System]</span> 
+                        <span class="log-info">Runner Service bereit für Pipeline-Ausführung</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const RUNNER_API_BASE = 'http://localhost:5050';
+        let lastLogTimestamp = null;
+        let logPollingInterval = null;
+
+        // Status-Tracking
+        const pipelineStatus = {
+            churn: 'idle',
+            cox: 'idle', 
+            cf: 'idle'
+        };
+
+        // Utility Functions
+        function updateStatus(pipeline, status) {
+            pipelineStatus[pipeline] = status;
+            const indicator = document.getElementById(`${pipeline}-status`);
+            const btn = document.getElementById(`${pipeline}-btn`);
+            
+            indicator.className = `status-indicator status-${status}`;
+            btn.disabled = status === 'running';
+            
+            if (status === 'running') {
+                btn.textContent = `${pipeline.toUpperCase()} läuft...`;
+            } else {
+                btn.textContent = `${pipeline.toUpperCase()} Pipeline starten`;
+            }
+        }
+
+        function addLogEntry(level, message, timestamp, jobId = null) {
+            const container = document.getElementById('logs-container');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            const time = new Date(timestamp).toLocaleTimeString();
+            const jobPrefix = jobId ? `[${jobId}] ` : '';
+            
+            entry.innerHTML = `
+                <span class="log-timestamp">[${time}]</span>
+                <span class="log-${level.toLowerCase()}">${jobPrefix}${message}</span>
+            `;
+            
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // API Functions
+        async function runPipeline(pipeline, data) {
+            try {
+                updateStatus(pipeline, 'running');
+                
+                const response = await fetch(`${RUNNER_API_BASE}/run/${pipeline}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                addLogEntry('INFO', `${pipeline.toUpperCase()} Pipeline gestartet: ${result.message}`, new Date().toISOString(), result.job_id);
+                
+                // Log-Polling starten falls noch nicht aktiv
+                if (!logPollingInterval) {
+                    startLogPolling();
+                }
+                
+            } catch (error) {
+                updateStatus(pipeline, 'error');
+                addLogEntry('ERROR', `Fehler beim Starten der ${pipeline.toUpperCase()} Pipeline: ${error.message}`, new Date().toISOString());
+            }
+        }
+
+        async function fetchLogs() {
+            try {
+                let url = `${RUNNER_API_BASE}/logs/stream`;
+                if (lastLogTimestamp) {
+                    url += `?since=${lastLogTimestamp}`;
+                }
+                
+                const response = await fetch(url);
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                
+                data.logs.forEach(log => {
+                    addLogEntry(log.level, log.message, log.timestamp, log.job_id);
+                    lastLogTimestamp = log.timestamp;
+                });
+                
+            } catch (error) {
+                console.error('Log-Polling Fehler:', error);
+            }
+        }
+
+        function startLogPolling() {
+            if (logPollingInterval) return;
+            
+            logPollingInterval = setInterval(fetchLogs, 2000); // Alle 2 Sekunden
+            addLogEntry('INFO', 'Log-Polling gestartet', new Date().toISOString());
+        }
+
+        // Event Listeners
+        document.getElementById('churn-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                experiment_id: parseInt(document.getElementById('churn-experiment-id').value),
+                training_from: document.getElementById('churn-training-from').value,
+                training_to: document.getElementById('churn-training-to').value,
+                test_from: document.getElementById('churn-test-from').value,
+                test_to: document.getElementById('churn-test-to').value,
+                test_reduction: document.getElementById('churn-test-mode').checked ? 0.9 : 0.0
+            };
+            
+            await runPipeline('churn', data);
+        });
+
+        document.getElementById('cox-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                experiment_id: parseInt(document.getElementById('cox-experiment-id').value),
+                cutoff_exclusive: document.getElementById('cox-cutoff').value
+            };
+            
+            await runPipeline('cox', data);
+        });
+
+        document.getElementById('cf-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                experiment_id: parseInt(document.getElementById('cf-experiment-id').value),
+                sample: document.getElementById('cf-sample').value ? parseInt(document.getElementById('cf-sample').value) : null,
+                limit: document.getElementById('cf-limit').value ? parseInt(document.getElementById('cf-limit').value) : null
+            };
+            
+            await runPipeline('cf', data);
+        });
+
+        // Experiment Management
+        async function loadExperiments() {
+            try {
+                const response = await fetch(`${RUNNER_API_BASE}/experiments`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                const select = document.getElementById('experiment-select');
+                
+                // Clear existing options
+                select.innerHTML = '<option value="">-- Experiment auswählen --</option>';
+                
+                // Add experiments
+                data.records.forEach(exp => {
+                    const option = document.createElement('option');
+                    option.value = exp.experiment_id;
+                    option.textContent = `${exp.experiment_id}: ${exp.experiment_name} (${exp.model_type})`;
+                    select.appendChild(option);
+                });
+                
+                addLogEntry('INFO', `${data.count} Experimente geladen`, new Date().toISOString());
+                
+            } catch (error) {
+                addLogEntry('ERROR', `Fehler beim Laden der Experimente: ${error.message}`, new Date().toISOString());
+                const select = document.getElementById('experiment-select');
+                select.innerHTML = '<option value="">Fehler beim Laden</option>';
+            }
+        }
+
+        function showExperimentDetails(experimentId) {
+            if (!experimentId) {
+                document.getElementById('experiment-details').style.display = 'none';
+                return;
+            }
+
+            fetch(`${RUNNER_API_BASE}/experiments/${experimentId}`)
+                .then(response => response.json())
+                .then(exp => {
+                    const detailsDiv = document.getElementById('experiment-info');
+                    detailsDiv.innerHTML = `
+                        <p><strong>Name:</strong> ${exp.experiment_name}</p>
+                        <p><strong>Model Type:</strong> ${exp.model_type}</p>
+                        <p><strong>Feature Set:</strong> ${exp.feature_set}</p>
+                        <p><strong>Training:</strong> ${exp.training_from} bis ${exp.training_to}</p>
+                        <p><strong>Backtest:</strong> ${exp.backtest_from} bis ${exp.backtest_to}</p>
+                        <p><strong>Status:</strong> <span style="color: ${exp.status === 'created' ? 'orange' : exp.status === 'completed' ? 'green' : 'red'}">${exp.status}</span></p>
+                        <p><strong>Erstellt:</strong> ${new Date(exp.created_at).toLocaleString()}</p>
+                    `;
+                    document.getElementById('experiment-details').style.display = 'block';
+                    
+                    // Update form fields
+                    document.getElementById('churn-experiment-id').value = exp.experiment_id;
+                    document.getElementById('churn-training-from').value = exp.training_from;
+                    document.getElementById('churn-training-to').value = exp.training_to;
+                    document.getElementById('churn-test-from').value = exp.backtest_from;
+                    document.getElementById('churn-test-to').value = exp.backtest_to;
+                })
+                .catch(error => {
+                    addLogEntry('ERROR', `Fehler beim Laden der Experiment-Details: ${error.message}`, new Date().toISOString());
+                });
+        }
+
+        // Event Listener für Experiment-Auswahl
+        document.getElementById('experiment-select').addEventListener('change', (e) => {
+            showExperimentDetails(e.target.value);
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadExperiments();
+            startLogPolling();
+        });
+    </script>
+</body>
+</html>

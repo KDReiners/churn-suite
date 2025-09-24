@@ -336,6 +336,10 @@ def crud_static(filename: str):
 @app.route("/sql/tables", methods=["GET"])
 def list_tables():
     db = _open_db()
+    try:
+        db.maybe_reload()
+    except Exception:
+        pass
     tables = db.data.get("tables", {})
     # Alle Tabellen anzeigen (keine Ausblendung)
     out: List[Dict[str, Any]] = []
@@ -1038,6 +1042,10 @@ def run_query():
 
     # Views injizieren (aus JSON-DB), dann LIMIT anhängen
     db = ChurnJSONDatabase()
+    try:
+        db.maybe_reload()
+    except Exception:
+        pass
     injected_sql = _inject_saved_views(sql, db)
     safe_sql = _ensure_limit(injected_sql, row_limit)
 

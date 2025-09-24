@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Churn Suite - Experiment Management</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f7;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .nav {
+            padding: 20px 30px;
+            border-bottom: 1px solid #e1e1e3;
+            background: #fafafa;
+        }
+        .nav a {
+            display: inline-block;
+            padding: 10px 20px;
+            margin-right: 10px;
+            background: #007aff;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .nav a:hover {
+            background: #0056cc;
+        }
+        .content {
+            padding: 30px;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #1d1d1f;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #424245;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d2d2d7;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .form-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+        .btn {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #0056cc;
+        }
+        .btn:disabled {
+            background: #d2d2d7;
+            cursor: not-allowed;
+        }
+        .btn-danger {
+            background: #ff3b30;
+        }
+        .btn-danger:hover {
+            background: #d70015;
+        }
+        .btn-secondary {
+            background: #8e8e93;
+        }
+        .btn-secondary:hover {
+            background: #6d6d70;
+        }
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+        .experiments-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 13px;
+        }
+        .experiments-table th,
+        .experiments-table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #e1e1e3;
+        }
+        .experiments-table th {
+            background: #f9f9f9;
+            font-weight: 600;
+            color: #424245;
+            position: sticky;
+            top: 0;
+        }
+        .experiments-table tr:hover {
+            background: #f9f9f9;
+        }
+        .actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .create-form, .edit-form {
+            background: #f9f9f9;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #e1e1e3;
+        }
+        .edit-form {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #8e8e93;
+        }
+        .error {
+            background: #ffe6e6;
+            border: 1px solid #ff9999;
+            color: #cc0000;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .success {
+            background: #e6ffe6;
+            border: 1px solid #99cc99;
+            color: #006600;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #e6f3ff;
+            border: 1px solid #99ccff;
+            color: #0066cc;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        .id-files-input {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .id-files-input input {
+            width: 200px;
+        }
+        .id-files-display {
+            font-family: 'SF Mono', Monaco, monospace;
+            background: #f5f5f5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .table-container {
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #e1e1e3;
+            border-radius: 6px;
+        }
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .status-created { background: #e3f2fd; color: #1976d2; }
+        .status-running { background: #fff3e0; color: #f57c00; }
+        .status-completed { background: #e8f5e8; color: #388e3c; }
+        .status-failed { background: #ffebee; color: #d32f2f; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Experiment Management</h1>
+            <p>Create, Read, Update, Delete - ML Experimente verwalten</p>
+        </div>
+        
+        <div class="nav">
+            <a href="index.html">← Pipeline Runner</a>
+            <a href="experiments-new.html">Experiment CRUD</a>
+        </div>
+        
+        <div class="content">
+            <!-- Notifications -->
+            <div id="notifications"></div>
+            
+            <!-- Create New Experiment -->
+            <div class="section">
+                <div class="section-title">Neues Experiment anlegen</div>
+                <div class="create-form" id="create-form">
+                    <form id="experiment-create-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="create-name">Experiment Name *</label>
+                                <input type="text" id="create-name" required placeholder="z.B. Churn Q4 2024 Enhanced">
+                            </div>
+                            <div class="form-group">
+                                <label for="create-model-type">Model Type</label>
+                                <input type="text" id="create-model-type" value="churn" readonly style="background-color: #f5f5f5; cursor: not-allowed;">
+                                <small style="color: #666; font-size: 0.9em;">Aktuell wird nur Churn-Modelling unterstützt</small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label for="create-feature-set">Feature Set *</label>
+                                <select id="create-feature-set" required>
+                                    <option value="">-- Wählen --</option>
+                                    <option value="standard">Standard</option>
+                                    <option value="enhanced">Enhanced</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="create-training-from">Training From *</label>
+                                <input type="text" id="create-training-from" required placeholder="202301" pattern="[0-9]{6}">
+                            </div>
+                            <div class="form-group">
+                                <label for="create-training-to">Training To *</label>
+                                <input type="text" id="create-training-to" required placeholder="202312" pattern="[0-9]{6}">
+                            </div>
+                        </div>
+                        
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label for="create-backtest-from">Backtest From *</label>
+                                <input type="text" id="create-backtest-from" required placeholder="202401" pattern="[0-9]{6}">
+                            </div>
+                            <div class="form-group">
+                                <label for="create-backtest-to">Backtest To *</label>
+                                <input type="text" id="create-backtest-to" required placeholder="202406" pattern="[0-9]{6}">
+                            </div>
+                            <div class="form-group">
+                                <label for="create-id-files">ID Files</label>
+                                <div class="id-files-input">
+                                    <input type="text" id="create-id-files" placeholder="1,2,3" value="1">
+                                    <span class="id-files-display" id="create-id-files-preview">[1]</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn">Experiment anlegen</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Edit Experiment (Hidden by default) -->
+            <div class="section hidden" id="edit-section">
+                <div class="section-title">Experiment bearbeiten</div>
+                <div class="edit-form" id="edit-form">
+                    <form id="experiment-edit-form">
+                        <input type="hidden" id="edit-id">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit-name">Experiment Name *</label>
+                                <input type="text" id="edit-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-model-type">Model Type</label>
+                                <input type="text" id="edit-model-type" readonly style="background-color: #f5f5f5; cursor: not-allowed;">
+                                <small style="color: #666; font-size: 0.9em;">Model Type kann nicht geändert werden</small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label for="edit-feature-set">Feature Set *</label>
+                                <select id="edit-feature-set" required>
+                                    <option value="standard">Standard</option>
+                                    <option value="enhanced">Enhanced</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-training-from">Training From *</label>
+                                <input type="text" id="edit-training-from" required pattern="[0-9]{6}">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-training-to">Training To *</label>
+                                <input type="text" id="edit-training-to" required pattern="[0-9]{6}">
+                            </div>
+                        </div>
+                        
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label for="edit-backtest-from">Backtest From *</label>
+                                <input type="text" id="edit-backtest-from" required pattern="[0-9]{6}">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-backtest-to">Backtest To *</label>
+                                <input type="text" id="edit-backtest-to" required pattern="[0-9]{6}">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-id-files">ID Files</label>
+                                <div class="id-files-input">
+                                    <input type="text" id="edit-id-files">
+                                    <span class="id-files-display" id="edit-id-files-preview"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="actions">
+                            <button type="submit" class="btn">Änderungen speichern</button>
+                            <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Abbrechen</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Experiments List -->
+            <div class="section">
+                <div class="section-title">
+                    Alle Experimente 
+                    <button class="btn btn-secondary btn-small" onclick="loadExperiments()" style="margin-left: 10px;">↻ Neu laden</button>
+                </div>
+                <div id="experiments-loading" class="loading">Lade Experimente...</div>
+                <div id="experiments-container" class="hidden">
+                    <div class="table-container">
+                        <table class="experiments-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Model Type</th>
+                                    <th>Feature Set</th>
+                                    <th>Training</th>
+                                    <th>Backtest</th>
+                                    <th>ID Files</th>
+                                    <th>Status</th>
+                                    <th>Erstellt</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="experiments-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="experiments-empty" class="loading hidden">
+                    Keine Experimente gefunden. Lege dein erstes Experiment an!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5050';
+        let experiments = [];
+        let editingId = null;
+
+        // Utility Functions
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notifications');
+            const notification = document.createElement('div');
+            notification.className = type;
+            notification.textContent = message;
+            container.appendChild(notification);
+            
+            setTimeout(() => {
+                if (container.contains(notification)) {
+                    container.removeChild(notification);
+                }
+            }, 5000);
+        }
+
+        function formatDate(isoString) {
+            if (!isoString) return '-';
+            return new Date(isoString).toLocaleString('de-DE');
+        }
+
+        function parseIdFiles(input) {
+            if (!input) return [1];
+            try {
+                const numbers = input.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                return numbers.length > 0 ? numbers : [1];
+            } catch (e) {
+                return [1];
+            }
+        }
+
+        function formatIdFiles(array) {
+            return Array.isArray(array) ? array.join(', ') : '1';
+        }
+
+        function updateIdFilesPreview(inputId, previewId) {
+            const input = document.getElementById(inputId);
+            const preview = document.getElementById(previewId);
+            const parsed = parseIdFiles(input.value);
+            preview.textContent = JSON.stringify(parsed);
+        }
+
+        // API Functions
+        async function loadExperiments() {
+            try {
+                console.log('Loading experiments from:', `${API_BASE}/experiments`);
+                const response = await fetch(`${API_BASE}/experiments`);
+                console.log('Response status:', response.status);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                console.log('API Response data:', data);
+                experiments = data.records || [];
+                console.log('Experiments array:', experiments, 'Length:', experiments.length);
+                renderExperiments();
+                
+            } catch (error) {
+                console.error('Load experiments error:', error);
+                showNotification(`Fehler beim Laden der Experimente: ${error.message}`, 'error');
+            }
+        }
+
+        async function createExperiment(experimentData) {
+            try {
+                const response = await fetch(`${API_BASE}/experiments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(experimentData)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const newExperiment = await response.json();
+                showNotification(`Experiment "${newExperiment.experiment_name}" erfolgreich angelegt!`);
+                
+                // Form zurücksetzen und Liste neu laden
+                document.getElementById('experiment-create-form').reset();
+                document.getElementById('create-id-files-preview').textContent = '[1]';
+                await loadExperiments();
+                
+            } catch (error) {
+                showNotification(`Fehler beim Anlegen: ${error.message}`, 'error');
+                console.error('Create experiment error:', error);
+            }
+        }
+
+        async function updateExperiment(experimentId, experimentData) {
+            try {
+                const response = await fetch(`${API_BASE}/experiments/${experimentId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(experimentData)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const updatedExperiment = await response.json();
+                showNotification(`Experiment "${updatedExperiment.experiment_name}" erfolgreich aktualisiert!`);
+                
+                cancelEdit();
+                await loadExperiments();
+                
+            } catch (error) {
+                showNotification(`Fehler beim Aktualisieren: ${error.message}`, 'error');
+                console.error('Update experiment error:', error);
+            }
+        }
+
+        async function deleteExperiment(experimentId, experimentName) {
+            if (!confirm(`Experiment "${experimentName}" wirklich löschen?\n\nAlle abhängigen Daten werden ebenfalls gelöscht (Cascade).\nDieser Vorgang kann nicht rückgängig gemacht werden.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/experiments/${experimentId}?cascade=true`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                showNotification(`Experiment "${experimentName}" erfolgreich gelöscht!`);
+                await loadExperiments();
+                
+            } catch (error) {
+                showNotification(`Fehler beim Löschen: ${error.message}`, 'error');
+                console.error('Delete experiment error:', error);
+            }
+        }
+
+        // UI Functions
+        function renderExperiments() {
+            console.log('renderExperiments called, experiments:', experiments);
+            const loading = document.getElementById('experiments-loading');
+            const container = document.getElementById('experiments-container');
+            const empty = document.getElementById('experiments-empty');
+            const tbody = document.getElementById('experiments-tbody');
+            
+            console.log('DOM elements:', {loading, container, empty, tbody});
+            
+            loading.classList.add('hidden');
+            
+            if (experiments.length === 0) {
+                console.log('No experiments found, showing empty state');
+                container.classList.add('hidden');
+                empty.classList.remove('hidden');
+                return;
+            }
+            
+            console.log('Rendering', experiments.length, 'experiments');
+            empty.classList.add('hidden');
+            container.classList.remove('hidden');
+            
+            tbody.innerHTML = experiments.map(exp => {
+                const statusClass = `status-${(exp.status || 'created').toLowerCase()}`;
+                return `
+                    <tr>
+                        <td><strong>${exp.experiment_id}</strong></td>
+                        <td><strong>${exp.experiment_name}</strong></td>
+                        <td>${exp.model_type}</td>
+                        <td>${exp.feature_set}</td>
+                        <td>${exp.training_from} - ${exp.training_to}</td>
+                        <td>${exp.backtest_from} - ${exp.backtest_to}</td>
+                        <td><span class="id-files-display">${JSON.stringify(exp.id_files)}</span></td>
+                        <td><span class="status-badge ${statusClass}">${exp.status || 'created'}</span></td>
+                        <td>${formatDate(exp.created_at)}</td>
+                        <td>
+                            <div class="actions">
+                                <button class="btn btn-secondary btn-small" onclick="editExperiment(${exp.experiment_id})">Edit</button>
+                                <button class="btn btn-danger btn-small" onclick="deleteExperiment(${exp.experiment_id}, '${exp.experiment_name.replace(/'/g, "\\'")}')">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function editExperiment(experimentId) {
+            const experiment = experiments.find(exp => exp.experiment_id === experimentId);
+            if (!experiment) return;
+            
+            editingId = experimentId;
+            
+            // Edit-Form füllen
+            document.getElementById('edit-id').value = experiment.experiment_id;
+            document.getElementById('edit-name').value = experiment.experiment_name;
+            document.getElementById('edit-model-type').value = experiment.model_type;
+            document.getElementById('edit-feature-set').value = experiment.feature_set;
+            document.getElementById('edit-training-from').value = experiment.training_from;
+            document.getElementById('edit-training-to').value = experiment.training_to;
+            document.getElementById('edit-backtest-from').value = experiment.backtest_from;
+            document.getElementById('edit-backtest-to').value = experiment.backtest_to;
+            document.getElementById('edit-id-files').value = formatIdFiles(experiment.id_files);
+            updateIdFilesPreview('edit-id-files', 'edit-id-files-preview');
+            
+            // Edit-Section anzeigen und hinscrollen
+            const editSection = document.getElementById('edit-section');
+            editSection.classList.remove('hidden');
+            editSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function cancelEdit() {
+            editingId = null;
+            document.getElementById('edit-section').classList.add('hidden');
+            document.getElementById('experiment-edit-form').reset();
+        }
+
+        // Event Listeners
+        document.getElementById('experiment-create-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            try {
+                const experimentData = {
+                    experiment_name: document.getElementById('create-name').value.trim(),
+                    model_type: 'churn',  // Fest auf 'churn' gesetzt
+                    feature_set: document.getElementById('create-feature-set').value,
+                    training_from: document.getElementById('create-training-from').value,
+                    training_to: document.getElementById('create-training-to').value,
+                    backtest_from: document.getElementById('create-backtest-from').value,
+                    backtest_to: document.getElementById('create-backtest-to').value,
+                    id_files: parseIdFiles(document.getElementById('create-id-files').value)
+                };
+                
+                // Validierung
+                if (!experimentData.experiment_name) {
+                    throw new Error('Experiment Name ist erforderlich');
+                }
+                // Model Type ist fest auf 'churn' gesetzt - keine Validierung nötig
+                if (!experimentData.feature_set) {
+                    throw new Error('Feature Set ist erforderlich');
+                }
+                
+                await createExperiment(experimentData);
+                
+            } catch (error) {
+                showNotification(`Validierungsfehler: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('experiment-edit-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!editingId) return;
+            
+            try {
+                const experimentData = {
+                    experiment_name: document.getElementById('edit-name').value.trim(),
+                    model_type: document.getElementById('edit-model-type').value,  // Behält den aktuellen Wert
+                    feature_set: document.getElementById('edit-feature-set').value,
+                    training_from: document.getElementById('edit-training-from').value,
+                    training_to: document.getElementById('edit-training-to').value,
+                    backtest_from: document.getElementById('edit-backtest-from').value,
+                    backtest_to: document.getElementById('edit-backtest-to').value,
+                    id_files: parseIdFiles(document.getElementById('edit-id-files').value)
+                };
+                
+                // Validierung
+                if (!experimentData.experiment_name) {
+                    throw new Error('Experiment Name ist erforderlich');
+                }
+                
+                await updateExperiment(editingId, experimentData);
+                
+            } catch (error) {
+                showNotification(`Validierungsfehler: ${error.message}`, 'error');
+            }
+        });
+
+        // ID Files Preview Updates
+        document.getElementById('create-id-files').addEventListener('input', () => {
+            updateIdFilesPreview('create-id-files', 'create-id-files-preview');
+        });
+
+        document.getElementById('edit-id-files').addEventListener('input', () => {
+            updateIdFilesPreview('edit-id-files', 'edit-id-files-preview');
+        });
+
+        // Model Type ist fest auf 'churn' gesetzt - kein Auto-Update nötig
+
+        // Initialize nach DOM-Load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing...');
+            showNotification('JavaScript geladen, lade Experimente...', 'info');
+            loadExperiments();
+        });
+        
+        // Fallback für den Fall, dass DOMContentLoaded bereits gefeuert hat
+        if (document.readyState === 'loading') {
+            // DOM wird noch geladen, Event-Listener ist ausreichend
+            console.log('DOM is still loading, waiting for DOMContentLoaded...');
+        } else {
+            // DOM ist bereits geladen
+            console.log('DOM already loaded, initializing immediately...');
+            showNotification('JavaScript geladen, lade Experimente...', 'info');
+            loadExperiments();
+        }
+        
+        // Auto-refresh alle 30 Sekunden
+        setInterval(loadExperiments, 30000);
+    </script>
+</body>
+</html>

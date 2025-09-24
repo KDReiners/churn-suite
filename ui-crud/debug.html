@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Debug</title>
+</head>
+<body>
+    <h1>API Debug Test</h1>
+    <div id="result"></div>
+    
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                resultDiv.innerHTML = 'Testing API...';
+                
+                const response = await fetch('http://localhost:5050/experiments');
+                resultDiv.innerHTML += '<br>Response status: ' + response.status;
+                
+                const data = await response.json();
+                resultDiv.innerHTML += '<br>Data received: ' + JSON.stringify(data, null, 2);
+                resultDiv.innerHTML += '<br>Records count: ' + (data.records ? data.records.length : 'N/A');
+                
+                if (data.records && data.records.length > 0) {
+                    resultDiv.innerHTML += '<br><br>First experiment: ' + JSON.stringify(data.records[0], null, 2);
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML += '<br>ERROR: ' + error.message;
+                console.error('API Test Error:', error);
+            }
+        }
+        
+        // Test sofort ausführen
+        testAPI();
+    </script>
+</body>
+</html>
