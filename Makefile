@@ -1,4 +1,4 @@
-.PHONY: start stop restart status logs down shutdown ingest cleanDB
+.PHONY: start stop restart status logs down shutdown ingest cleanDB save push savepush
 
 # Ports
 RUNNER_PORT=5050
@@ -54,4 +54,29 @@ ingest:
 cleanDB:
 	@echo "⚠️  WARNING: This will delete ALL data in the database!"
 	@source .venv/bin/activate && python clean_database.py
+
+# --- Git Shortcuts ---
+
+# Usage examples:
+#   make save m="feat: add X"        # commit all changes (including untracked)
+#   make push                         # push current branch to origin (sets upstream if missing)
+#   make savepush m="wip"            # commit all + push
+
+save:
+	@git add -A
+	@msg="$(if $(m),$(m),chore: savepoint $(shell date '+%Y-%m-%d %H:%M:%S'))" ; \
+	 echo "Committing: $$msg" ; \
+	 git commit -m "$$msg" || echo "Nothing to commit."
+
+push:
+	@branch=$$(git rev-parse --abbrev-ref HEAD) ; \
+	 if git rev-parse --abbrev-ref --symbolic-full-name @\{u\} >/dev/null 2>&1; then \
+	   echo "Pushing $$branch to tracked upstream..." ; \
+	   git push ; \
+	 else \
+	   echo "Setting upstream and pushing $$branch to origin..." ; \
+	   git push -u origin $$branch ; \
+	 fi
+
+savepush: save push
 
