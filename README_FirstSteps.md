@@ -139,10 +139,11 @@ Nach dem Start der Services:
 - **SQL-Interface**: http://localhost:5051/sql
 - **Datenbank-Management**: http://localhost:5051/db
 
-### UI-CRUD (über Management Studio, Port 5051)
+### UI-CRUD & Pipeline Runner (über Management Studio, Port 5051)
 - **Hauptseite**: http://localhost:5051/crud
 - **Debug-Interface**: http://localhost:5051/crud/debug
 - **Experimente**: http://localhost:5051/crud/experiments
+ - **Pipeline Runner**: http://localhost:5051/crud/index.html
 
 ## 📁 Projektstruktur
 
@@ -209,6 +210,7 @@ python -c "import pandas, numpy, sklearn, catboost; print('✅ Grundlegende Pake
    - Runner-Service: http://localhost:5050/health
    - Management Studio: http://localhost:5051/sql
    - CRUD-Interface: http://localhost:5051/crud
+   - Pipeline Runner: http://localhost:5051/crud/index.html
 
 6. **Services stoppen**
    ```bash
