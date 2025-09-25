@@ -627,6 +627,34 @@ def create_experiment():
             return jsonify({"error": f"Invalid YYYYMM for field '{k}'"}), 400
     try:
         db = _open_db()
+        # Duplikat-Prüfung: gleiche Kombination aus Zeiträumen, Feature-Set, Modelltyp und id_files
+        try:
+            existing_records = db.data.get("tables", {}).get("experiments", {}).get("records", []) or []
+            criteria_model_type = str(payload.get("model_type", "") or "")
+            criteria_feature_set = str(payload.get("feature_set", "standard") or "standard")
+            criteria_training_from = str(payload.get("training_from"))
+            criteria_training_to = str(payload.get("training_to"))
+            criteria_backtest_from = str(payload.get("backtest_from"))
+            criteria_backtest_to = str(payload.get("backtest_to"))
+            criteria_id_files = payload.get("id_files")
+
+            for ex in existing_records:
+                try:
+                    if (
+                        str(ex.get("model_type", "")) == criteria_model_type and
+                        str(ex.get("feature_set", "standard")) == criteria_feature_set and
+                        str(ex.get("training_from")) == criteria_training_from and
+                        str(ex.get("training_to")) == criteria_training_to and
+                        str(ex.get("backtest_from")) == criteria_backtest_from and
+                        str(ex.get("backtest_to")) == criteria_backtest_to and
+                        (ex.get("id_files") or None) == criteria_id_files
+                    ):
+                        return jsonify({"error": "Experiment mit identischen Parametern bereits vorhanden"}), 400
+                except Exception:
+                    continue
+        except Exception:
+            # Bei Fehlern in der Prüfung: weiterfahren, nicht blockieren
+            pass
         exp_id = db.create_experiment(
             experiment_name=str(payload.get("experiment_name")),
             training_from=str(payload.get("training_from")),
