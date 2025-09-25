@@ -62,8 +62,8 @@ make logs
 
 ### Service-Ports
 - **Runner-Service**: Port 5050
-- **Management Studio**: Port 5051
-- **UI-CRUD**: Port 5052
+- **Management Studio**: Port 5051 (liefert auch UI-CRUD unter /crud)
+- **UI-CRUD**: Port 5051 (Pfad: /crud)
 
 ### Workspace-Makefile (bl-workspace/)
 
@@ -132,17 +132,17 @@ Nach dem Start der Services:
 ### Runner-Service (Port 5050)
 - **Health-Check**: http://localhost:5050/health
 - **API-Dokumentation**: http://localhost:5050/docs
-- **Status**: http://localhost:5050/status
+- **Root**: http://localhost:5050/
 
 ### Management Studio (Port 5051)
 - **Hauptseite**: http://localhost:5051
 - **SQL-Interface**: http://localhost:5051/sql
 - **Datenbank-Management**: http://localhost:5051/db
 
-### UI-CRUD (Port 5052)
-- **Hauptseite**: http://localhost:5052
-- **Debug-Interface**: http://localhost:5052/debug.html
-- **Experimente**: http://localhost:5052/experiments.html
+### UI-CRUD (über Management Studio, Port 5051)
+- **Hauptseite**: http://localhost:5051/crud
+- **Debug-Interface**: http://localhost:5051/crud/debug
+- **Experimente**: http://localhost:5051/crud/experiments
 
 ## 📁 Projektstruktur
 
@@ -208,7 +208,7 @@ python -c "import pandas, numpy, sklearn, catboost; print('✅ Grundlegende Pake
 5. **Arbeiten**
    - Runner-Service: http://localhost:5050/health
    - Management Studio: http://localhost:5051/sql
-   - CRUD-Interface: http://localhost:5052
+   - CRUD-Interface: http://localhost:5051/crud
 
 6. **Services stoppen**
    ```bash

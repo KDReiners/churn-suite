@@ -27,11 +27,9 @@ start: logs
 	@echo "Starting Runner-Service (port $(RUNNER_PORT))..."
 	@RUNNER_RELOAD=0 nohup $(PYTHON) runner-service/app.py > logs/runner.log 2>&1 &
 	@sleep 1
-	@echo "Starting Management Studio (port $(MGMT_PORT))..."
+	@echo "Starting Management Studio (port $(MGMT_PORT)) incl. CRUD..."
 	@MGMT_STUDIO_PORT=$(MGMT_PORT) PYTHONPATH=$(PWD):$(PWD)/json-database nohup $(PYTHON) ui-managementstudio/app.py > logs/ui-mgmt.log 2>&1 &
 	@sleep 1
-	@echo "Starting UI-CRUD (port $(CRUD_PORT))..."
-	@nohup $(PYTHON) -m http.server $(CRUD_PORT) -d ui-crud > logs/ui-crud.log 2>&1 &
 	@echo "All services started. See logs/ for outputs."
 
 restart:
@@ -44,8 +42,8 @@ status:
 	-@curl -s http://localhost:$(RUNNER_PORT)/health || true; echo
 	@echo "Management Studio:"
 	-@curl -sI http://localhost:$(MGMT_PORT)/sql | head -n 1 || true; echo
-	@echo "UI-CRUD:"
-	-@curl -sI http://localhost:$(CRUD_PORT) | head -n 1 || true; echo
+	@echo "UI-CRUD (served by Management Studio):"
+	-@curl -sI http://localhost:$(MGMT_PORT)/crud | head -n 1 || true; echo
 
 ingest:
 	@echo "Starting data ingestion (CSV → Stage0 → Outbox → rawdata)..."

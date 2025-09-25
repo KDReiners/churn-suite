@@ -72,9 +72,10 @@ template_dir_fs = str(_BASE_DIR / "templates")
 static_dir_fs = str(_BASE_DIR / "static")
 
 # Zusätzlich (Fallback/Kompatibilität): ProjectPaths-basierte Verzeichnisse
-template_dir_pp = str(ProjectPaths.project_root() / "UI" / "managementstudio" / "templates")
-static_dir_pp = str(ProjectPaths.project_root() / "UI" / "managementstudio" / "static")
-crud_templates_dir = str(ProjectPaths.project_root() / "UI" / "CRUD")
+template_dir_pp = str(ProjectPaths.project_root() / "ui-managementstudio" / "templates")
+static_dir_pp = str(ProjectPaths.project_root() / "ui-managementstudio" / "static")
+crud_templates_dir = str(ProjectPaths.project_root() / "ui-crud")
+crud_static_dir = str(ProjectPaths.project_root() / "ui-crud" / "static")
 
 # Flask App auf FileSystem-Pfade setzen (damit /sql die korrekten Dateien lädt)
 app = Flask(__name__, template_folder=template_dir_fs, static_folder=static_dir_fs)
@@ -322,15 +323,22 @@ def sql_home():
 
 @app.route("/crud", methods=["GET"])
 def crud_home():
-    # Rendert ui/CRUD/experiments.html
+    # Rendert ui-crud/experiments.html
     return render_template("experiments.html")
+
+@app.route("/crud/experiments", methods=["GET"])
+def crud_experiments():
+    return render_template("experiments.html")
+
+@app.route("/crud/debug", methods=["GET"])
+def crud_debug():
+    return render_template("debug.html")
 
 
 @app.route("/crud/static/<path:filename>")
 def crud_static(filename: str):
-    # Statische Assets aus ui/CRUD/static
-    directory = str((ProjectPaths.project_root() / "ui" / "CRUD" / "static").resolve())
-    return send_from_directory(directory, filename)
+    # Statische Assets aus ui-crud/static
+    return send_from_directory(crud_static_dir, filename)
 
 
 @app.route("/sql/tables", methods=["GET"])
