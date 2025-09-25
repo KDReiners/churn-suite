@@ -220,6 +220,31 @@ python -c "import pandas, numpy, sklearn, catboost; print('✅ Grundlegende Pake
    deactivate
    ```
 
+## 🔁 Git‑Workflow (einfach, ohne Branches)
+
+Du arbeitest direkt auf `main` und sicherst alles mit einem Befehl nach Remote.
+
+1) Sicherstellen, dass du auf `main` bist (nur einmal nötig):
+```bash
+git switch main
+```
+
+2) Änderungen speichern und pushen:
+```bash
+# a) Alles committen (inkl. untracked Dateien)
+make save m="feat: deine Nachricht"
+
+# b) Push auf Remote
+make push
+
+# c) Beides in einem Schritt
+make savepush m="feat: deine Nachricht"
+```
+
+Hinweise:
+- Die Auto‑PR‑Automatisierung greift nur bei Nicht‑`main`‑Branches. Auf `main` gibt es keine PR‑Pflicht.
+- Wenn du später mit Branches arbeiten willst: Branch erstellen und pushen → PR wird automatisch erstellt.
+
 ## ⚠️ **Datenbank-Management**
 
 ### Datenbank komplett leeren
