@@ -334,6 +334,16 @@ def crud_experiments():
 def crud_debug():
     return render_template("debug.html")
 
+# Pipeline Runner UI (Index) unter CRUD bereitstellen
+@app.route("/crud/index.html", methods=["GET"])
+def crud_index():
+    return render_template("index.html")
+
+# Alias für alte Links
+@app.route("/crud/experiments-new.html", methods=["GET"])
+def crud_experiments_new_alias():
+    return render_template("experiments.html")
+
 
 @app.route("/crud/static/<path:filename>")
 def crud_static(filename: str):
