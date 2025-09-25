@@ -36,29 +36,18 @@ class ProjectPaths:
     # -------------------------
     @staticmethod
     def config_directory() -> Path:
+        # Single Source of Truth: json-database/config/shared/config
+        # Keine Fallbacks – falls der Pfad fehlt, sollen aufrufende Komponenten explizit fehlschlagen
         root = ProjectPaths.project_root()
-        # Präferenz: json-database/config/shared/config, dann bl-churn/config/shared/config
-        return ProjectPaths._existing_first(
-            root / "json-database" / "config" / "shared" / "config",
-            root / "bl-churn" / "config" / "shared" / "config",
-        )
+        return root / "json-database" / "config" / "shared" / "config"
 
     @staticmethod
     def _config_file(filename: str) -> Path:
         """Liefert die erste existierende Konfigurationsdatei in der bevorzugten Reihenfolge.
-        Fallback: erster Kandidat (auch wenn nicht vorhanden), damit Aufrufer einen konsistenten Pfad erhalten.
+        Single Source of Truth: json-database/config/shared/config – keine alternativen Orte.
         """
         root = ProjectPaths.project_root()
-        candidates = [
-            root / "json-database" / "config" / "shared" / "config" / filename,
-            root / "bl-churn" / "config" / "shared" / "config" / filename,
-            root / "bl-cox" / "config" / "shared" / "config" / filename,
-            root / "bl-counterfactuals" / "config" / "shared" / "config" / filename,
-        ]
-        for p in candidates:
-            if p.exists():
-                return p
-        return candidates[0]
+        return root / "json-database" / "config" / "shared" / "config" / filename
 
     @staticmethod
     def json_database_directory() -> Path:
