@@ -42,7 +42,14 @@ app = FastAPI(title="Churn Suite Runner Service", version="1.0.0")
 # CORS-Middleware hinzufügen für UI-Integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "http://127.0.0.1:8080"],
+    allow_origins=[
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:5051",
+        "http://127.0.0.1:5051",
+        "http://localhost:5052",
+        "http://127.0.0.1:5052",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -327,6 +334,76 @@ async def get_logs(since: Optional[str] = None, job_id: Optional[str] = None):
         "total_count": len(log_store),
         "filtered_count": len(filtered_logs)
     }
+
+
+# === FILES TIMEBASE ENDPOINT ===
+
+@app.get("/files/{file_id}/timebase")
+async def get_file_timebase(file_id: int):
+    """Liefert das Zeitfenster (min/max I_TIMEBASE) für ein gegebenes File.
+    Quelle: rawdata-Tabelle der JSON-DB. Robust gegenüber id_files als int oder Liste.
+    """
+    if not json_db:
+        raise HTTPException(status_code=500, detail="JSON-DB not available")
+
+    try:
+        try:
+            json_db.maybe_reload()
+        except Exception:
+            pass
+        tables = (json_db.data.get("tables", {}) or {})
+        raw_tbl = (tables.get("rawdata", {}) or {}).get("records", []) or []
+
+        def _to_int_safe(v):
+            try:
+                return int(v)
+            except Exception:
+                return None
+
+        min_tb: Optional[int] = None
+        max_tb: Optional[int] = None
+        target_id = _to_int_safe(file_id)
+
+        for rec in raw_tbl:
+            try:
+                ids = rec.get("id_files")
+                matches = False
+                if isinstance(ids, list):
+                    try:
+                        matches = target_id in [int(x) for x in ids if x is not None]
+                    except Exception:
+                        matches = False
+                elif ids is not None:
+                    try:
+                        matches = int(ids) == target_id
+                    except Exception:
+                        matches = False
+                if not matches:
+                    continue
+
+                tb_val = rec.get("I_TIMEBASE")
+                tb = _to_int_safe(tb_val)
+                if tb is None:
+                    # Versuche alternative Keys/gängige Schreibweisen
+                    tb = _to_int_safe(rec.get("i_timebase"))
+                if tb is None:
+                    continue
+
+                if min_tb is None or tb < min_tb:
+                    min_tb = tb
+                if max_tb is None or tb > max_tb:
+                    max_tb = tb
+            except Exception:
+                continue
+
+        if min_tb is None or max_tb is None:
+            raise HTTPException(status_code=404, detail=f"No records found for file_id {file_id}")
+
+        return {"file_id": file_id, "min_timebase": min_tb, "max_timebase": max_tb}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to compute timebase: {str(e)}")
 
 
 @app.get("/jobs")

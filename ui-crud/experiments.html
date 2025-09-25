@@ -285,6 +285,7 @@
                                 <div class="id-files-input">
                                     <input type="text" id="create-id-files" placeholder="1,2,3" value="1">
                                     <span class="id-files-display" id="create-id-files-preview">[1]</span>
+                                    <span class="id-files-display" id="create-id-files-timebase" title="Zeitfenster je nach Auswahl der File-IDs"></span>
                                 </div>
                             </div>
                         </div>
@@ -344,6 +345,7 @@
                                 <div class="id-files-input">
                                     <input type="text" id="edit-id-files">
                                     <span class="id-files-display" id="edit-id-files-preview"></span>
+                                    <span class="id-files-display" id="edit-id-files-timebase" title="Zeitfenster je nach Auswahl der File-IDs"></span>
                                 </div>
                             </div>
                         </div>
@@ -436,6 +438,45 @@
             const preview = document.getElementById(previewId);
             const parsed = parseIdFiles(input.value);
             preview.textContent = JSON.stringify(parsed);
+        }
+
+        async function fetchTimebaseForId(fileId) {
+            try {
+                const resp = await fetch(`${API_BASE}/files/${fileId}/timebase`);
+                if (!resp.ok) return null;
+                return await resp.json();
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function updateTimebaseDisplay(inputId, displayId) {
+            const input = document.getElementById(inputId);
+            const display = document.getElementById(displayId);
+            const ids = parseIdFiles(input.value);
+            if (!ids || ids.length === 0) {
+                display.textContent = '';
+                return;
+            }
+            try {
+                const results = await Promise.all(ids.map(id => fetchTimebaseForId(id)));
+                let minTB = null, maxTB = null;
+                results.filter(Boolean).forEach(r => {
+                    if (r && typeof r.min_timebase !== 'undefined') {
+                        if (minTB === null || r.min_timebase < minTB) minTB = r.min_timebase;
+                    }
+                    if (r && typeof r.max_timebase !== 'undefined') {
+                        if (maxTB === null || r.max_timebase > maxTB) maxTB = r.max_timebase;
+                    }
+                });
+                if (minTB === null || maxTB === null) {
+                    display.textContent = '';
+                } else {
+                    display.textContent = `I_TIMEBASE: ${minTB} – ${maxTB}`;
+                }
+            } catch (e) {
+                display.textContent = '';
+            }
         }
 
         // API Functions
@@ -679,10 +720,12 @@
         // ID Files Preview Updates
         document.getElementById('create-id-files').addEventListener('input', () => {
             updateIdFilesPreview('create-id-files', 'create-id-files-preview');
+            updateTimebaseDisplay('create-id-files', 'create-id-files-timebase');
         });
 
         document.getElementById('edit-id-files').addEventListener('input', () => {
             updateIdFilesPreview('edit-id-files', 'edit-id-files-preview');
+            updateTimebaseDisplay('edit-id-files', 'edit-id-files-timebase');
         });
 
         // Model Type ist fest auf 'churn' gesetzt - kein Auto-Update nötig
@@ -692,6 +735,8 @@
             console.log('DOM loaded, initializing...');
             showNotification('JavaScript geladen, lade Experimente...', 'info');
             loadExperiments();
+            // initial timebase display for defaults
+            updateTimebaseDisplay('create-id-files', 'create-id-files-timebase');
         });
         
         // Fallback für den Fall, dass DOMContentLoaded bereits gefeuert hat
