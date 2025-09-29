@@ -13,7 +13,7 @@ Dünne Orchestrierungsschicht für BL-Module (Churn, Cox, Counterfactuals).
 ## Quick Start
 ```bash
 cd /Users/klaus.reiners/Projekte/churn-suite
-source .venv311/bin/activate
+source .venv/bin/activate
 python runner-service/app.py
 ```
 
@@ -21,6 +21,7 @@ python runner-service/app.py
 - `POST /run/churn` - Churn-Pipeline starten
 - `POST /run/cox` - Cox-Pipeline starten  
 - `POST /run/cf` - Counterfactuals-Pipeline starten
+- `POST /experiments/{id}/run` mit `pipeline="churn_cf"` - Kombi-Pipeline: Churn → Counterfactuals
 - `GET /logs/stream` - Live-Logs abrufen (Polling)
 - `GET /jobs` - Aktive Jobs anzeigen
 - `DELETE /jobs/{job_id}` - Job beenden

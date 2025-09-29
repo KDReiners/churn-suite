@@ -65,10 +65,6 @@ executor = ThreadPoolExecutor(max_workers=3)
 
 class ChurnRunRequest(BaseModel):
     experiment_id: int
-    training_from: str
-    training_to: str
-    test_from: str
-    test_to: str
     test_reduction: Optional[float] = 0.0
 
 
@@ -255,25 +251,44 @@ print("SUCCESS: Experiment " + str(exp_id) + " processed successfully")
 
 @app.post("/run/cox", response_model=RunResponse)
 async def run_cox(request: CoxRunRequest, background_tasks: BackgroundTasks):
-    """Cox-Pipeline ausführen"""
+    """Cox-Pipeline ausführen (direkt über CoxWorkingPipeline)."""
     job_id = generate_job_id("cox", request.experiment_id)
-    
+
     cmd = [
         sys.executable,
         "-c",
         f"""
 import sys
+from pathlib import Path
 sys.path.insert(0, '{ProjectPaths.bl_cox_directory()}')
 sys.path.insert(0, '{ProjectPaths.json_database_directory()}')
-from bl.Cox.cox_auto_processor import main
-main(experiment_id={request.experiment_id}, cutoff_exclusive='{request.cutoff_exclusive}')
+
+from bl.Cox.cox_working_main import CoxWorkingPipeline
+from bl.json_database.churn_json_database import ChurnJSONDatabase
+
+exp_id = int({request.experiment_id})
+cutoff_raw = '{request.cutoff_exclusive}'
+try:
+    cutoff_str = cutoff_raw.replace('-', '') if isinstance(cutoff_raw, str) else str(cutoff_raw)
+    cutoff_int = int(cutoff_str)
+except Exception as e:
+    print('ERROR: invalid cutoff_exclusive value:', cutoff_raw)
+    raise
+
+pipeline = CoxWorkingPipeline(cutoff_exclusive=cutoff_int)
+results = pipeline.run_full_analysis(experiment_id=exp_id)
+if not results.get('success', False):
+    import sys as _sys
+    print('ERROR: Cox pipeline failed for experiment', exp_id)
+    _sys.exit(1)
+print('SUCCESS: Cox pipeline completed for experiment', exp_id)
 """
     ]
-    
+
     background_tasks.add_task(
         lambda: executor.submit(run_subprocess, cmd, job_id, ProjectPaths.project_root())
     )
-    
+
     return RunResponse(
         job_id=job_id,
         status="started",
@@ -293,8 +308,8 @@ async def run_counterfactuals(request: CounterfactualsRunRequest, background_tas
 import sys
 sys.path.insert(0, '{ProjectPaths.bl_counterfactuals_directory()}')
 sys.path.insert(0, '{ProjectPaths.json_database_directory()}')
-from bl.Counterfactuals.counterfactuals_cli import main
-main(experiment_id={request.experiment_id}, sample={request.sample}, limit={request.limit})
+from bl.Counterfactuals.counterfactuals_cli import run as cf_run
+cf_run(experiment_id={request.experiment_id}, sample={request.sample}, limit={request.limit})
 """
     ]
     
@@ -663,20 +678,9 @@ async def run_experiment_pipeline(experiment_id: int, request: ExperimentRunRequ
         
         # Pipeline-spezifische Logik
         if request.pipeline == "churn":
-            # Churn-Pipeline mit Experiment-Daten
-            def format_date(date_str, default):
-                if not date_str:
-                    return default
-                if len(str(date_str)) == 6:  # YYYYMM format
-                    return f"{str(date_str)[:4]}-{str(date_str)[4:]}"
-                return str(date_str)
-            
+            # Churn-Pipeline: nur experiment_id + optional test_reduction
             churn_request = ChurnRunRequest(
                 experiment_id=experiment_id,
-                training_from=format_date(experiment.get("training_from"), "2020-01"),
-                training_to=format_date(experiment.get("training_to"), "2023-12"),
-                test_from=format_date(experiment.get("backtest_from"), "2024-01"),
-                test_to=format_date(experiment.get("backtest_to"), "2024-06"),
                 test_reduction=(0.9 if (getattr(request, 'test', False) or False) else 0.0)
             )
             return await run_churn(churn_request, background_tasks)
@@ -697,6 +701,66 @@ async def run_experiment_pipeline(experiment_id: int, request: ExperimentRunRequ
                 limit=None
             )
             return await run_counterfactuals(cf_request, background_tasks)
+        
+        elif request.pipeline == "churn_cf":
+            # Kombinierte Pipeline: Churn → Counterfactuals sequentiell
+            job_id = generate_job_id("churn_cf", experiment_id)
+            code = """
+import sys
+from config.paths_config import ProjectPaths
+sys.path.insert(0, str(ProjectPaths.bl_churn_directory()))
+sys.path.insert(0, str(ProjectPaths.bl_counterfactuals_directory()))
+sys.path.insert(0, str(ProjectPaths.json_database_directory()))
+from bl.Churn.churn_auto_processor import ChurnAutoProcessor
+from bl.json_database.churn_json_database import ChurnJSONDatabase
+from bl.Counterfactuals.counterfactuals_cli import run as cf_run
+
+db = ChurnJSONDatabase()
+exp_id = int(sys.argv[1])
+experiment = db.get_experiment_by_id(exp_id)
+if not experiment:
+    print('ERROR: Experiment ' + str(exp_id) + ' not found')
+    import sys as _sys; _sys.exit(1)
+
+have_details = False
+try:
+    tables = (db.data.get('tables', {}) or {})
+    recs = (tables.get('customer_churn_details', {}) or {}).get('records', []) or []
+    for r in recs:
+        eid = r.get('experiment_id') or r.get('id_experiments')
+        if eid is not None and int(eid) == int(exp_id):
+            have_details = True
+            break
+except Exception:
+    have_details = False
+
+if not have_details:
+    processor = ChurnAutoProcessor()
+    success = processor.process_experiment(experiment, custom_periods=None, test_reduction=float(0.0))
+    if not success:
+        print('ERROR: Churn processing failed for experiment ' + str(exp_id))
+        import sys as _sys; _sys.exit(1)
+    print('SUCCESS: Churn completed for experiment', exp_id)
+else:
+    print('SKIP: Churn already processed for experiment', exp_id)
+
+cf_run(experiment_id=exp_id, sample=None, limit=None)
+print('SUCCESS: Counterfactuals completed for experiment', exp_id)
+"""
+            cmd = [
+                sys.executable,
+                "-c",
+                code,
+                str(experiment_id)
+            ]
+            background_tasks.add_task(
+                lambda: executor.submit(run_subprocess, cmd, job_id, ProjectPaths.project_root())
+            )
+            return RunResponse(
+                job_id=job_id,
+                status="started",
+                message=f"Churn+CF pipeline started for experiment {experiment_id}"
+            )
             
         else:
             raise HTTPException(status_code=400, detail=f"Unknown pipeline: {request.pipeline}")

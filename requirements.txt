@@ -133,3 +133,5 @@ zipp==3.23.0
 fastapi==0.115.6
 pydantic==2.9.2
 uvicorn[standard]==0.32.0
+shap==0.47.*
+imbalanced-learn==0.12.*

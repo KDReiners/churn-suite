@@ -142,8 +142,8 @@ Nach dem Start der Services:
 ### UI-CRUD & Pipeline Runner (über Management Studio, Port 5051)
 - **Hauptseite**: http://localhost:5051/crud
 - **Debug-Interface**: http://localhost:5051/crud/debug
-- **Experimente**: http://localhost:5051/crud/experiments
- - **Pipeline Runner**: http://localhost:5051/crud/index.html
+- **Experimente**: http://localhost:5051/crud/experiments.html
+- **Pipeline Runner**: http://localhost:5051/crud/index.html
 
 ## 📁 Projektstruktur
 
@@ -282,6 +282,21 @@ make ingest
   - Runner-Service: `lsof -i :5050`
   - Management Studio: `lsof -i :5051`
   - UI-CRUD: `lsof -i :5052`
+
+### Prozesse manuell beenden (Beispiel)
+
+```bash
+# 1) PID ermitteln (Beispiel: Runner-Service auf Port 5050)
+lsof -ti tcp:5050
+
+# 2) Prozess beenden (PID aus Schritt 1 einsetzen)
+kill -TERM <PID>   # sauberer Stopp
+# Falls nötig (hart beenden):
+kill -9 <PID>
+
+# Einzeiler (ohne manuelles Einsetzen der PID):
+lsof -ti tcp:5050 | xargs -n 1 kill
+```
 
 ---
 

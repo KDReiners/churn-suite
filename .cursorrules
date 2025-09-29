@@ -147,3 +147,19 @@ ml_fallbacks_notes:
   - "Do not add try/except around optional ML frameworks to silently continue."
   - "If libraries like xgboost/lightgbm are unavailable, raise and surface the error."
   - "No implicit libomp/homebrew installation steps by tooling."
+
+# ==============================
+# 14. Kritische Daten-Semantik (I_ALIVE & Digitalisierung)
+# ==============================
+data_semantics:
+  i_alive:
+    definition: "BINÄR: 1 = aktiv (nicht gekündigt), 0 = churned (gekündigt)"
+    never_store_will_churn_directly: true
+    mapping_rule: "I_ALIVE = 1 - WILL_CHURN (z. B. ACTUAL_CHURN)"
+    persistence_guards:
+      - "Beim Schreiben nach `customer_churn_details` explizit invertieren (siehe `bl-churn/bl/Churn/enhanced_early_warning.py`)."
+      - "Exports/Views dürfen die Semantik nicht verändern."
+    fail_fast_check: "Alive-Rate validieren; bei auffälliger Inversion hart abbrechen."
+  n_digitalizationrate:
+    encoding: "One-Hot-Bins: `N_DIGITALIZATIONRATE_*` (Intervallklassen); Bins > 1.0 können leer sein."
+    no_rolling_trend: true

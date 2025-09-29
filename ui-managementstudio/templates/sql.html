@@ -10,9 +10,15 @@
   </head>
   <body>
     <nav class="navbar navbar-dark bg-dark mb-2">
-      <div class="container-fluid">
-        <span class="navbar-brand mb-0 h1">Management Studio – JSON SQL (Read-Only)</span>
-        <span class="navbar-text text-warning">SELECT/EXPLAIN/PRAGMA/WITH only</span>
+      <div class="container-fluid d-flex justify-content-between align-items-center">
+        <div>
+          <span class="navbar-brand mb-0 h1">Management Studio – JSON SQL (Read-Only)</span>
+          <span class="navbar-text text-warning ms-2">SELECT/EXPLAIN/PRAGMA/WITH only</span>
+        </div>
+        <div>
+          <a href="/crud/index.html" class="btn btn-sm btn-success me-2">Pipeline Runner</a>
+          <a href="/crud/experiments.html" class="btn btn-sm btn-primary">Experiment CRUD</a>
+        </div>
       </div>
     </nav>
 

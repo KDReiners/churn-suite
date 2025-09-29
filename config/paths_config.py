@@ -62,6 +62,10 @@ class ProjectPaths:
         return ProjectPaths.project_root() / "bl-cox"
 
     @staticmethod
+    def bl_counterfactuals_directory() -> Path:
+        return ProjectPaths.project_root() / "bl-counterfactuals"
+
+    @staticmethod
     def feature_mapping_file() -> Path:
         return ProjectPaths._config_file("feature_mapping.json")
 
@@ -76,6 +80,11 @@ class ProjectPaths:
     @staticmethod
     def ui_settings_file() -> Path:
         return ProjectPaths._config_file("ui_settings.json")
+
+    @staticmethod
+    def shap_config_file() -> Path:
+        # Zentrale SHAP-Konfigurationsdatei
+        return ProjectPaths._config_file("shap_config.json")
 
     # -------------------------
     # Daten / Artefakte
@@ -143,6 +152,11 @@ class ProjectPaths:
     @staticmethod
     def outbox_counterfactuals_directory() -> Path:
         return ProjectPaths.outbox_directory() / "counterfactuals"
+
+    @staticmethod
+    def outbox_shap_experiment_directory(experiment_id: int | str) -> Path:
+        # Outbox-Pfad für SHAP-Artefakte eines Experiments
+        return ProjectPaths.outbox_directory() / "shap" / f"experiment_{int(experiment_id)}"
 
     # -------------------------
     # Utilities

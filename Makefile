@@ -78,3 +78,8 @@ push:
 
 savepush: save push
 
+# --- SHAP Runner ---
+shap:
+	@echo "Running SHAP for EXP_ID=$(EXP_ID) ..."
+	@PYTHONPATH=$(PWD)/bl-shap/bl:$(PWD)/bl-churn:$(PWD)/json-database $(PYTHON) -m Shap.shap_runner --experiment-id $(EXP_ID) --sample-size $(SAMPLE_SIZE) --top-k $(TOPK) --batch-size $(BATCH_SIZE) --background-size $(BG_SIZE) --plots $(PLOTS)
+

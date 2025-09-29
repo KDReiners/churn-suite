@@ -344,6 +344,15 @@ def crud_index():
 def crud_experiments_new_alias():
     return render_template("experiments.html")
 
+# Zusätzliche Aliasse/Weiterleitungen für robuste Navigation
+@app.route("/crud", methods=["GET"])
+def crud_root_redirect():
+    return redirect(url_for("crud_index"))
+
+@app.route("/crud/experiments.html", methods=["GET"])
+def crud_experiments_html():
+    return render_template("experiments.html")
+
 
 @app.route("/crud/static/<path:filename>")
 def crud_static(filename: str):
