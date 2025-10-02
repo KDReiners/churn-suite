@@ -79,6 +79,13 @@ class CounterfactualsRunRequest(BaseModel):
     limit: Optional[int] = None
 
 
+class ShapRunRequest(BaseModel):
+    experiment_id: int
+    sample_size: Optional[int] = None  # optional override
+    background_size: Optional[int] = None
+    top_k: Optional[int] = None
+
+
 class RunResponse(BaseModel):
     job_id: str
     status: str
@@ -321,6 +328,55 @@ cf_run(experiment_id={request.experiment_id}, sample={request.sample}, limit={re
         job_id=job_id,
         status="started",
         message=f"Counterfactuals pipeline started for experiment {request.experiment_id}"
+    )
+
+
+@app.post("/run/shap", response_model=RunResponse)
+async def run_shap(request: ShapRunRequest, background_tasks: BackgroundTasks):
+    """SHAP-Pipeline ausführen"""
+    job_id = generate_job_id("shap", request.experiment_id)
+
+    # Compose Python inline script to run ShapService
+    cmd = [
+        sys.executable,
+        "-c",
+        f"""
+import sys
+sys.path.insert(0, '{ProjectPaths.bl_shap_directory()}')
+sys.path.insert(0, '{ProjectPaths.json_database_directory()}')
+sys.path.insert(0, '{ProjectPaths.bl_churn_directory()}')
+from bl.Shap.shap_service import ShapService, ShapConfig
+
+exp_id = int({request.experiment_id})
+cfg = ShapConfig()
+try:
+    # Optionale Overrides
+    ss = {request.sample_size if hasattr(request, 'sample_size') and request.sample_size is not None else 'None'}
+    if ss is not None:
+        cfg.sample_size = int(ss)
+    bg = {request.background_size if hasattr(request, 'background_size') and request.background_size is not None else 'None'}
+    if bg is not None:
+        cfg.background_size = int(bg)
+    tk = {request.top_k if hasattr(request, 'top_k') and request.top_k is not None else 'None'}
+    if tk is not None:
+        cfg.top_k = int(tk)
+except Exception:
+    pass
+
+service = ShapService(experiment_id=exp_id, config=cfg)
+out_dir = service.run()
+print('SUCCESS: SHAP completed for experiment', exp_id, '→', out_dir)
+"""
+    ]
+
+    background_tasks.add_task(
+        lambda: executor.submit(run_subprocess, cmd, job_id, ProjectPaths.project_root())
+    )
+
+    return RunResponse(
+        job_id=job_id,
+        status="started",
+        message=f"SHAP pipeline started for experiment {request.experiment_id}"
     )
 
 
@@ -761,7 +817,7 @@ print('SUCCESS: Counterfactuals completed for experiment', exp_id)
                 status="started",
                 message=f"Churn+CF pipeline started for experiment {experiment_id}"
             )
-            
+        
         else:
             raise HTTPException(status_code=400, detail=f"Unknown pipeline: {request.pipeline}")
             

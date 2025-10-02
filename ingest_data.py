@@ -96,6 +96,18 @@ try:
         # Importiere Daten aus der Outbox in die rawdata-Tabelle
         records_added = db.import_from_outbox_stage0_union(replace=True)
         print(f'✅ Imported {records_added} records into rawdata table')
+        # Normalisierung: Stage0→CSV-Verknüpfung und FK-Setzung
+        try:
+            link_res = db.link_stage0_parent_and_normalize_rawdata()
+            print(f"🔗 Normalized rawdata.file_id to CSV parent: {link_res}")
+        except Exception as e:
+            print(f"⚠️ Normalization warning (rawdata.file_id): {e}")
+        # Migration: Experiments/Rawdata → file_id, optional Entfernen alter id_files
+        try:
+            mig_res = db.migrate_files_to_fk(remove_id_files=True)
+            print(f"🛠️ Migrated experiments/rawdata to file_id: {mig_res}")
+        except Exception as e:
+            print(f"⚠️ Migration warning (file_id): {e}")
         
         # Datenbank speichern
         if db.save():

@@ -47,12 +47,13 @@ if _MGMT_OUTBOX:
     os.environ["OUTBOX_ROOT"] = _MGMT_OUTBOX
 
 def _open_db() -> ChurnJSONDatabase:
-    db_path = os.environ.get("MGMT_CHURN_DB_PATH") or os.environ.get("CHURN_DB_PATH")
+    """Öffnet die JSON-DB strikt über ProjectPaths (keine ENV-Overrides)."""
+    db_path = ProjectPaths.dynamic_system_outputs_directory() / "churn_database.json"
     try:
-        return ChurnJSONDatabase(db_path=db_path) if db_path else ChurnJSONDatabase()
+        return ChurnJSONDatabase(str(db_path))
     except TypeError:
         # Fallback für ältere Signaturen
-        return ChurnJSONDatabase(db_path) if db_path else ChurnJSONDatabase()
+        return ChurnJSONDatabase(str(db_path))
 
 # Zusätzliche Loader für mehrere Template-Verzeichnisse (ManagementStudio + CRUD)
 from jinja2 import ChoiceLoader, FileSystemLoader
@@ -380,6 +381,33 @@ def list_tables():
     return jsonify({"tables": out})
 
 
+@app.route("/sql/db-info", methods=["GET"])
+def db_info():
+    """Diagnose-Endpunkt: zeigt verwendeten DB-Pfad und SHAP-Tabellenstatus."""
+    info: Dict[str, Any] = {}
+    try:
+        info["MGMT_CHURN_DB_PATH"] = os.environ.get("MGMT_CHURN_DB_PATH")
+        info["CHURN_DB_PATH"] = os.environ.get("CHURN_DB_PATH")
+        info["MGMT_OUTBOX_ROOT"] = os.environ.get("MGMT_OUTBOX_ROOT")
+        info["OUTBOX_ROOT"] = os.environ.get("OUTBOX_ROOT")
+        default_db = ProjectPaths.dynamic_system_outputs_directory() / "churn_database.json"
+        info["default_db_path"] = str(default_db)
+        try:
+            st = default_db.stat()
+            info["default_db_exists"] = True
+            info["default_db_size"] = st.st_size
+            info["default_db_mtime"] = st.st_mtime
+        except Exception:
+            info["default_db_exists"] = False
+        db = _open_db()
+        tables = db.data.get("tables", {})
+        shap_tables = {k: len((v.get("records", []) or [])) for k, v in tables.items() if "shap" in k}
+        info["shap_tables"] = shap_tables
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({"error": str(e), **info}), 500
+
+
 # -----------------------------
 # Live Log Streaming (Polling)
 # -----------------------------
@@ -614,6 +642,123 @@ def maintenance_reload_thresholds():
         if updated_exps:
             db.save()
         return jsonify({"updated_experiments": updated_exps, "count": len(updated_exps)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/maintenance/cleanup-artifacts", methods=["POST"])
+def maintenance_cleanup_artifacts():
+    if not _check_password():
+        return jsonify({"error": "Unauthorized"}), 403
+    try:
+        from datetime import datetime as _dt
+        import os as _os
+        import re as _re
+        db = ChurnJSONDatabase()
+        db.ensure_artifacts_registry()
+
+        models_dir = ProjectPaths.get_models_directory()
+        kept = []
+        deleted = []
+        errors = []
+
+        # Sammle Churn-Modelle (Enhanced_EarlyWarning)
+        json_models = sorted(models_dir.glob("Enhanced_EarlyWarning_*.json"))
+        joblib_models = sorted(models_dir.glob("Enhanced_EarlyWarning_*.joblib"))
+        backtests = sorted(models_dir.glob("Enhanced_EarlyWarning_Backtest_*.json"))
+
+        # Map Timestamp → joblib/json
+        def _ts(name: str) -> str:
+            m = _re.search(r"_(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})", name)
+            return m.group(1) if m else ""
+
+        ts_to_json = { _ts(p.name): p for p in json_models if 'Backtest_' not in p.name }
+        ts_to_joblib = { _ts(p.name): p for p in joblib_models }
+
+        # Bestimme jüngste TS (pro Experiment nicht zuverlässig ableitbar ohne teures JSON-Parsing) → global jüngste behalten
+        timestamps = sorted([t for t in ts_to_json.keys() if t], reverse=True)
+        keep_ts = timestamps[0] if timestamps else None
+
+        # Behalte jüngstes Paar (json+joblib)
+        for ts, p in ts_to_json.items():
+            paired_joblib = ts_to_joblib.get(ts)
+            if ts == keep_ts:
+                # Registry: als active markieren
+                try:
+                    db.add_artifact_record("model", None, str(p), status="active")
+                    if paired_joblib:
+                        db.add_artifact_record("model", None, str(paired_joblib), status="active")
+                except Exception:
+                    pass
+                kept.append(str(p))
+                if paired_joblib:
+                    kept.append(str(paired_joblib))
+            else:
+                # Löschen
+                for path in [p, paired_joblib]:
+                    if not path:
+                        continue
+                    try:
+                        _os.remove(path)
+                        db.update_artifact_status(str(path), "deleted") or db.add_artifact_record("model", None, str(path), status="deleted")
+                        deleted.append(str(path))
+                    except Exception as e:
+                        errors.append({"file": str(path), "error": str(e)})
+
+        # Backtests: nur jüngsten behalten (global)
+        bt_timestamps = sorted([_ts(p.name) for p in backtests if _ts(p.name)], reverse=True)
+        keep_bt_ts = bt_timestamps[0] if bt_timestamps else None
+        for p in backtests:
+            ts = _ts(p.name)
+            if ts and ts == keep_bt_ts:
+                try:
+                    db.add_artifact_record("backtest", None, str(p), status="active")
+                except Exception:
+                    pass
+                kept.append(str(p))
+            else:
+                try:
+                    _os.remove(p)
+                    db.update_artifact_status(str(p), "deleted") or db.add_artifact_record("backtest", None, str(p), status="deleted")
+                    deleted.append(str(p))
+                except Exception as e:
+                    errors.append({"file": str(p), "error": str(e)})
+
+        db.save()
+        return jsonify({
+            "kept": kept,
+            "deleted": deleted,
+            "errors": errors,
+            "kept_count": len(kept),
+            "deleted_count": len(deleted)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/maintenance/purge-artifacts", methods=["POST"])
+def maintenance_purge_artifacts():
+    if not _check_password():
+        return jsonify({"error": "Unauthorized"}), 403
+    try:
+        db = ChurnJSONDatabase()
+        db.ensure_artifacts_registry()
+        tbl = db.data.get("tables", {}).get("artifacts_registry", {})
+        records = tbl.get("records", []) or []
+        keep = []
+        purged = []
+        for r in records:
+            status = str(r.get("status", "")).lower()
+            if status == "deleted":
+                purged.append(r)
+            else:
+                keep.append(r)
+        tbl["records"] = keep
+        db.save()
+        return jsonify({
+            "purged_count": len(purged),
+            "remaining_count": len(keep)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -865,8 +1010,8 @@ def run_experiment(experiment_id: int):
                 _sys.stderr = _StreamToLog("ERROR", "cf_pipeline")
                 try:
                     from bl.Counterfactuals import counterfactuals_cli as _cf
-                    # Standard: sample 0.2, limit 0 (alle)
-                    _cf.run(experiment_id=int(experiment_id), sample=0.2, limit=0)
+                    # Standard: sample 1.0 (100% vollständige Analyse), limit 0 (alle)
+                    _cf.run(experiment_id=int(experiment_id), sample=1.0, limit=0)
                 finally:
                     try:
                         _sys.stdout.flush(); _sys.stderr.flush()
@@ -1319,7 +1464,7 @@ def create_app() -> Flask:
 if __name__ == "__main__":
     # Hinweis: Von Projekt-Root starten, damit Imports funktionieren.
     # Beispiel: python ui/managementstudio/app.py
-    port = int(os.environ.get("MGMT_STUDIO_PORT", "5050"))
+    port = int(os.environ.get("MGMT_STUDIO_PORT", "5051"))
     debug_flag = bool(os.environ.get("MGMT_STUDIO_DEBUG"))
     # Standard: stabiler Hintergrundbetrieb ohne Reloader/Debug
     app.run(host="127.0.0.1", port=port, debug=debug_flag, use_reloader=debug_flag, threaded=True)

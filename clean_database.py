@@ -19,8 +19,9 @@ sys.path.extend([
 ])
 
 try:
-    from bl.json_database.churn_json_database import ChurnJSONDatabase
+from bl.json_database.churn_json_database import ChurnJSONDatabase
     
+    drop_views = ("--drop-views" in sys.argv) or (os.environ.get("CLEANDB_DROP_VIEWS") in ("1","true","True","yes","YES"))
     print("⚠️  WARNING: This will delete ALL data in the database!")
     print("Clearing all tables in the JSON database...")
     print("=" * 50)
@@ -33,7 +34,13 @@ try:
     total_records = 0
     
     print("=== CLEARING DATABASE ===")
+    if not drop_views:
+        print("(Views werden NICHT gelöscht. Mit --drop-views oder CLEANDB_DROP_VIEWS=1 löschen.)")
     for table_name, table_data in tables.items():
+        if not drop_views and table_name == "views":
+            # Views behalten (logische Views)
+            print(f"Skipping {table_name}: preserve logical views (records={len(table_data.get('records', []))})")
+            continue
         records = table_data.get('records', [])
         record_count = len(records)
         total_records += record_count
@@ -48,7 +55,7 @@ try:
     else:
         print("❌ Error saving cleared database")
     
-    print("\n⚠️  Database is now empty!")
+    print("\n⚠️  Database is now empty (ohne Views)!")
     print("Run 'make ingest' to reload data from CSV files.")
     
 except ImportError as e:

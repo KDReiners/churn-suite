@@ -65,24 +65,20 @@ Zuletzt geprüft: 2025-09-22
   - Code-Auszüge in Doku mit Pfadangabe in Backticks (z. B. `bl/Churn/churn_model_trainer.py`)
 
 ### 5) Tooling & Services
-- **Runner-Service** (`runner-service/`):
-  - FastAPI-Service für Pipeline-Orchestrierung (Port 5050)
-  - Endpunkte (Auszug):
-    - `POST /run/churn` (direkt, mit `experiment_id`, Zeiträumen, `test_mode`)
-    - `POST /experiments/{id}/run` (indirekt, nutzt gespeichertes Experiment)
-    - `GET  /files` (Dateiabdeckung: min/max `I_TIMEBASE`, `rows` je File-ID)
+- **Runner-Service** (`runner-service/`, Port 5050):
+  - Pipeline-Orchestrierung (Einzel-Läufe):
+    - `POST /run/churn`
+    - `POST /run/cox`
+    - `POST /run/shap`
+    - `POST /run/cf`
+  - Weitere:
     - `GET  /logs/stream` (Live-Logs)
-  - Subprocess-Management für BL-Module
-  - Reload-Steuerung: `RUNNER_RELOAD=0` deaktiviert Auto-Reload für stabile Läufe
+    - `GET  /files/{id}/timebase`
   - Start: `python runner-service/app.py`
-- **CRUD-Frontend** (`ui-crud/`):
-  - Reines HTML/JS Frontend für Runner-Service API
-  - Live-Log-Streaming und Status-Tracking
-  - Testmodus-Schalter: „Testmodus (90% Datenreduktion)“ (default an)
-  - Start: `cd ui-crud && python3 -m http.server 8080`
-- **Management Studio** (`ui-managementstudio/`):
-  - Read-Only SQL-Interface für JSON-DB
-  - Legacy CRUD-Funktionen (wird durch Runner-Service ersetzt)
+- **Management Studio** (`ui-managementstudio/`, Port 5051):
+  - Read-Only SQL für JSON‑DB: `http://localhost:5051/sql`
+  - Pipeline Runner UI (liefert `ui-crud/` mit aus): `http://localhost:5051/crud/index.html`
+  - Einheitliche Pfade via `config/paths_config.py` (keine ENV‑Overrides für DB‑Pfad)
 - **Makefile-Shortcuts** (zentral in `bl-workspace/Makefile`):
   - `make ingest`: CSV→Stage0→Outbox→rawdata (Union, replace)
   - `make mgmt` / `make open`: Management Studio starten/öffnen
@@ -112,21 +108,21 @@ Zuletzt geprüft: 2025-09-22
 
 ### 6) Quick Start
 
-**Neue Architektur (Runner-Service + CRUD-Frontend):**
 ```bash
-# 1. Runner-Service starten
+# 1) Services starten
 cd /Users/klaus.reiners/Projekte/churn-suite
-RUNNER_RELOAD=0 python runner-service/app.py
+python runner-service/app.py &      # Port 5050
+python ui-managementstudio/app.py & # Port 5051
 
-# 2. CRUD-Frontend starten (neues Terminal)
-cd ui-crud
-python3 -m http.server 8080
-# Browser: http://localhost:8080
+# 2) Browser öffnen
+# - Pipeline Runner UI:  http://localhost:5051/crud/index.html
+# - SQL Management UI:   http://localhost:5051/sql
 
-# 3. Pipeline ausführen über Web-UI oder API
-curl -X POST http://localhost:5050/run/churn \
-  -H "Content-Type: application/json" \
-  -d '{"experiment_id": 1, "training_from": "2024-01", "training_to": "2024-12", "test_from": "2025-01", "test_to": "2025-08", "test_mode": false}'
+# 3) API-Beispiele (Einzellauf)
+curl -X POST http://localhost:5050/run/churn -H 'Content-Type: application/json' -d '{"experiment_id":1}'
+curl -X POST http://localhost:5050/run/cox   -H 'Content-Type: application/json' -d '{"experiment_id":1, "cutoff_exclusive":"202501"}'
+curl -X POST http://localhost:5050/run/shap  -H 'Content-Type: application/json' -d '{"experiment_id":1}'
+curl -X POST http://localhost:5050/run/cf    -H 'Content-Type: application/json' -d '{"experiment_id":1}'
 ```
 
 **Legacy (Management Studio):**
@@ -144,25 +140,11 @@ make mgmt
 make open
 ```
  
-### 6.1) UI-Pipeline Start (Idempotent)
+### 6.1) Hinweise
 
 ```bash
-# Services starten (neue Sessions)
-cd /Users/klaus.reiners/Projekte/churn-suite
-source .venv/bin/activate
-python runner-service/app.py &             # Port 5050
-cd ui-crud && python3 -m http.server 8080 &
-python ../ui-managementstudio/app.py &     # Port 5001
-
-# Browser
-# - Pipeline Runner:     http://localhost:8080/
-# - Experiments (CRUD):  http://localhost:8080/experiments.html
-# - Management Studio:   http://localhost:5001/sql/
-
-# Pipeline idempotent starten (mehrfach möglich ohne Doppelungen)
-curl -X POST http://localhost:5050/run/churn \
-  -H "Content-Type: application/json" \
-  -d '{"experiment_id": 1, "training_from": "202401", "training_to": "202412", "test_from": "202501", "test_to": "202508"}'
+# Management Studio cached die JSON‑DB (Singleton). Bei neuen Tabellen UI neu laden/neu starten.
+# SHAP schreibt Tabellen: shap_global, shap_local_topk; optional: shap_global_aggregated, shap_global_by_digitalization.
 ```
 
 Hinweise:

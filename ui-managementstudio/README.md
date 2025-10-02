@@ -1,63 +1,53 @@
-Last reviewed: 2025-09-21
+# ui-managementstudio - Management Studio
 
-# UI – Management Studio (Read-Only JSON SQL)
+**Last reviewed: 2025-09-29**
 
-## Zweck
-Web-UI (Flask) für read-only SQL-Abfragen und einfache Verwaltung auf der JSON-Database (DuckDB-basiert).
+## 🎯 **Zweck**
 
-## Quick Start
+Web-UI für SQL-Abfragen auf JSON-Database und Pipeline-Management.
+
+## 🏗️ **Architektur**
+
+- **Flask-App**: Web-Interface für JSON-DB
+- **SQL-Interface**: DuckDB-basierte Abfragen
+- **Pipeline-Integration**: Experiment-Management und Pipeline-Trigger
+- **CORS-Support**: Cross-Origin-Requests für Frontend
+
+## 🚀 **Quick Start**
+
+### **Service starten:**
 ```bash
-cd /Users/klaus.reiners/Projekte/churn-suite/bl-workspace
-make mgmt
-make open
+cd /Users/klaus.reiners/Dokumente/Projekte/churn-suite
+source .venv/bin/activate
+python ui-managementstudio/app.py
 ```
 
-Direktstart:
-```bash
-cd /Users/klaus.reiners/Projekte/churn-suite/ui-managementstudio
-python app.py
-```
+### **URLs:**
+- **SQL-Interface**: http://localhost:5051/sql/
+- **Pipeline Runner**: http://localhost:8080/ (über ui-crud)
+- **Experiment CRUD**: http://localhost:8080/experiments.html
 
-## Endpunkte
-- `/sql` – Editor, Tabellenliste, Ergebnis-Grid, Views, CLI-Tabellen
-- `/sql/tables` – Tabellen mit Record-Zahl und Beschreibung
-- `/sql/schema/<table>` – Schema-Infos (display_type/description)
-- `/sql/views` (GET/POST) – Views auf JSON-DB (erfordert Passwort für POST)
-- `/sql/query` (POST) – Query-Ausführung (nur SELECT/EXPLAIN/PRAGMA/WITH)
-- `/logs/live` – In-Memory Log-Stream (Polling)
-- `/experiments` (GET/POST/PUT/DELETE) – CRUD auf Experimente (Passwort erforderlich)
-- `/experiments/<id>/run` – Pipeline-Run (churn/cox/cf) async, passwortgeschützt
-- `/experiments/<id>/materialize` – Materialisierung von Detailtabellen
+## 📊 **Features**
 
-## Konfiguration
-- ENV: `MGMT_STUDIO_PORT`, `MGMT_OUTBOX_ROOT`, `MGMT_CHURN_DB_PATH`
-- Pfade: `config/paths_config.py`
+### **SQL-Interface:**
+- DuckDB-basierte Abfragen auf JSON-Database
+- Tabellen-Übersicht und Schema-Info
+- Query-History und Export-Funktionen
 
-## Sicherheit
-- Read-only SQL-Whitelist, Timeout, LIMIT enforcement
-- Admin-Aktionen nur mit `X-Admin-Password`
+### **Pipeline-Management:**
+- Experiment-Erstellung und -Verwaltung
+- Pipeline-Trigger (Churn, Cox, SHAP, CF)
+- Live-Log-Streaming und Status-Monitoring
 
-## Troubleshooting
-- UI lädt nicht → Pfade/ENV prüfen, venv aktivieren
-- Tabellen/Views fehlen → JSON-DB prüfen, Pipelines ausführen
-- Timeout → Query vereinfachen, LIMIT reduzieren
+## 🔧 **Konfiguration**
 
-## Frisch ingestierte Dateien finden
-- Outbox-Root:
-  - ENV `MGMT_OUTBOX_ROOT` (vom Dev-Skript gesetzt) oder `OUTBOX_ROOT`
-  - Fallback: `bl-churn/dynamic_system_outputs/outbox`
-- Stage0-Exports liegen unter: `outbox/stage0_cache/<csv_hash>.json`
-- Workflow in der UI:
-  1) `make ingest` ausführen (erzeugt Stage0 + Outbox-Export)
-  2) UI starten: `make mgmt` und `make open` → Tab SQL öffnen
-  3) Tabelle/View „files“ prüfen (falls vorhanden) oder Dateiliste via OS/Explorer öffnen
-  4) Optional: Query auf JSON-DB (z. B. letzte Files) – sofern in DB registriert
+- **Port**: 5051 (Standard)
+- **JSON-DB**: Automatische Erkennung über `config/paths_config.py`
+- **CORS**: Cross-Origin-Requests für Frontend-Integration
 
-Beispiel für eine einfache SQL (falls Files registriert wurden):
-```sql
-SELECT *
-FROM files
-ORDER BY dt_inserted DESC
-LIMIT 10;
-```
+## 📚 **Dokumentation**
 
+**Zentrale Dokumentation:** [NEXT_STEPS.md](../NEXT_STEPS.md)
+
+**Detaillierte Anleitungen:**
+- [ui-managementstudio/RUNBOOK.md](RUNBOOK.md) - Betriebsabläufe

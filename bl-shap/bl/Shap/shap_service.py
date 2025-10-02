@@ -62,6 +62,8 @@ class ShapConfig:
     make_plots: bool = False
     seed: int = 42
     top_global_n: int = 50
+    aggregate_by_raw: bool = True  # optional: Raw-Feature Aggregation aktivieren
+    cluster_by_digitalization: bool = True  # optional: Cluster-Auswertung nach N_DIGITALIZATIONRATE
 
     @staticmethod
     def from_filesystem() -> "ShapConfig":
@@ -77,6 +79,8 @@ class ShapConfig:
                     make_plots=bool(data.get("make_plots", False)),
                     seed=int(data.get("seed", 42)),
                     top_global_n=int(data.get("top_global_n", 50)),
+                    aggregate_by_raw=bool(data.get("aggregate_by_raw", True)),
+                    cluster_by_digitalization=bool(data.get("cluster_by_digitalization", True)),
                 )
             except Exception:
                 # Robust: Verwende Defaults, wenn Config fehlerhaft ist
@@ -290,6 +294,63 @@ class ShapService:
     # ------------------------------
     # Aggregation & Export
     # ------------------------------
+    def _load_feature_mapping(self) -> Dict[str, List[str]]:
+        """Lädt Raw→Engineered Feature-Mapping aus der zentralen Config.
+        Erwartetes Format: { "I_MAINTENANCE": ["I_MAINTENANCE_L12_sum", ...], ... }
+        """
+        mapping: Dict[str, List[str]] = {}
+        try:
+            fmap = self.paths.feature_mapping_file()
+            if fmap.exists():
+                data = json.loads(fmap.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    for raw, lst in data.items():
+                        if isinstance(raw, str) and isinstance(lst, list):
+                            mapping[raw] = [str(x) for x in lst if isinstance(x, str)]
+        except Exception:
+            mapping = {}
+        return mapping
+
+    def _aggregate_shap_by_raw(self, feature_names: List[str], shap_matrix: np.ndarray) -> Tuple[List[str], np.ndarray, Dict[str, List[str]]]:
+        """Aggregiert SHAP-Werte über Engineered-Features je Raw-Feature.
+        Returns: (aggregated_feature_names, aggregated_shap_matrix, used_mapping)
+        """
+        mapping = self._load_feature_mapping()
+        if not mapping:
+            # Keine Aggregation möglich
+            return feature_names, shap_matrix, {}
+
+        name_to_idx = {name: i for i, name in enumerate(feature_names)}
+        aggregated_cols: List[str] = []
+        aggregated_values: List[np.ndarray] = []
+        used_mapping: Dict[str, List[str]] = {}
+
+        used_engineered: set[str] = set()
+        for raw, eng_list in mapping.items():
+            idxs = [name_to_idx[e] for e in eng_list if e in name_to_idx]
+            if not idxs:
+                continue
+            # Summe der SHAPs über alle zugehörigen engineered Spalten
+            agg_vals = shap_matrix[:, idxs].sum(axis=1)
+            aggregated_cols.append(raw)
+            aggregated_values.append(agg_vals)
+            used_mapping[raw] = [feature_names[i] for i in idxs]
+            used_engineered.update(used_mapping[raw])
+
+        if not aggregated_cols:
+            return feature_names, shap_matrix, {}
+
+        # Optional: Unmapped engineered Features separat erhalten (nicht aggregiert)
+        # Für Klarheit liefern wir NUR aggregierte Raw-Features zurück
+        agg_matrix = np.vstack([col.reshape(-1, 1) for col in aggregated_values]).T  # shape (n, k)
+        return aggregated_cols, agg_matrix, used_mapping
+
+    def _infer_digitalization_cluster(self, df_slice: pd.DataFrame) -> List[str]:
+        """Ermittelt pro Zeile eine Cluster-Kategorie für N_DIGITALIZATIONRATE.
+        Delegiert an zentrale Segmentierungsfunktion.
+        """
+        from config.digitalization_segmentation import infer_digitalization_cluster
+        return infer_digitalization_cluster(df_slice)
     def _export_global_summary(self, out_dir: Path, feature_names: List[str], shap_matrix: np.ndarray) -> None:
         abs_vals = np.abs(shap_matrix)
         mean_abs = abs_vals.mean(axis=0)
@@ -322,6 +383,78 @@ class ShapService:
         out_path = out_dir / "shap_global_summary.json"
         out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         self.logger.info(f"💾 Global Summary: {out_path}")
+
+        # Optional: Aggregierte Global-Summary nach Raw-Features
+        if self.cfg.aggregate_by_raw:
+            try:
+                agg_feats, agg_shap, used_map = self._aggregate_shap_by_raw(feature_names, shap_matrix)
+                if agg_feats and len(agg_feats) > 0 and agg_shap is not None:
+                    abs_vals_a = np.abs(agg_shap)
+                    mean_abs_a = abs_vals_a.mean(axis=0)
+                    mean_raw_a = agg_shap.mean(axis=0)
+                    rows_a = []
+                    for i, feat in enumerate(agg_feats):
+                        rows_a.append({
+                            "feature": feat,
+                            "mean_abs_shap": float(np.asarray(mean_abs_a[i]).mean()),
+                            "mean_shap": float(np.asarray(mean_raw_a[i]).mean()),
+                            "components": used_map.get(feat, []),
+                        })
+                    rows_a.sort(key=lambda r: r["mean_abs_shap"], reverse=True)
+                    if isinstance(self.cfg.top_global_n, int) and self.cfg.top_global_n > 0:
+                        rows_a = rows_a[: self.cfg.top_global_n]
+                    for rank, row in enumerate(rows_a, start=1):
+                        row["rank"] = rank
+                    payload_a = {
+                        "experiment_id": self.experiment_id,
+                        "global_shap_aggregated": rows_a,
+                    }
+                    out_path_a = out_dir / "shap_global_summary_aggregated.json"
+                    out_path_a.write_text(json.dumps(payload_a, indent=2, ensure_ascii=False), encoding="utf-8")
+                    self.logger.info(f"💾 Global Summary (aggregiert): {out_path_a}")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Aggregierte Global-Summary übersprungen: {e}")
+
+    def _export_global_by_digitalization(self, out_dir: Path, df_slice_for_groups: pd.DataFrame, feature_names: List[str], shap_matrix: np.ndarray) -> None:
+        try:
+            clusters = self._infer_digitalization_cluster(df_slice_for_groups)
+            if not clusters:
+                return
+            # Gruppen bilden
+            from collections import defaultdict
+            grp_to_idx: Dict[str, List[int]] = defaultdict(list)
+            for i, lab in enumerate(clusters):
+                grp_to_idx[str(lab)].append(i)
+            result: Dict[str, List[Dict[str, Any]]] = {}
+            for grp, idxs in grp_to_idx.items():
+                if not idxs:
+                    continue
+                sub = shap_matrix[idxs, :]
+                abs_vals = np.abs(sub)
+                mean_abs = abs_vals.mean(axis=0)
+                mean_raw = sub.mean(axis=0)
+                rows = []
+                for j, feat in enumerate(feature_names):
+                    rows.append({
+                        "feature": feat,
+                        "mean_abs_shap": float(np.asarray(mean_abs[j]).mean()),
+                        "mean_shap": float(np.asarray(mean_raw[j]).mean()),
+                    })
+                rows.sort(key=lambda r: r["mean_abs_shap"], reverse=True)
+                topn = rows[: self.cfg.top_global_n] if isinstance(self.cfg.top_global_n, int) and self.cfg.top_global_n > 0 else rows
+                # rank annotieren
+                for rank, row in enumerate(topn, start=1):
+                    row["rank"] = rank
+                result[str(grp)] = topn
+            out = {
+                "experiment_id": self.experiment_id,
+                "global_shap_by_digitalization": result
+            }
+            p = out_dir / "shap_global_summary_by_digitalization.json"
+            p.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+            self.logger.info(f"💾 Global Summary (by digitalization): {p}")
+        except Exception as e:
+            self.logger.warning(f"⚠️ SHAP Digitalization-Aggregat fehlgeschlagen: {e}")
 
     def _export_local_topk(self, out_dir: Path, df_meta: pd.DataFrame, X: np.ndarray, shap_matrix: np.ndarray, feature_names: List[str]) -> None:
         top_k = max(1, int(self.cfg.top_k))
@@ -362,6 +495,45 @@ class ShapService:
         out_path = out_dir / "shap_local_topk.jsonl"
         out_path.write_text("\n".join(lines), encoding="utf-8")
         self.logger.info(f"💾 Local Top-K: {out_path} ({len(lines)} Zeilen)")
+
+        # Optional: Aggregierte Local Top-K nach Raw-Features (nur SHAP, ohne value)
+        if self.cfg.aggregate_by_raw:
+            try:
+                agg_feats, agg_shap, _used_map = self._aggregate_shap_by_raw(feature_names, shap_matrix)
+                if agg_feats and len(agg_feats) > 0 and agg_shap is not None:
+                    lines_a: List[str] = []
+                    k = max(1, int(self.cfg.top_k))
+                    n_cols = int(agg_shap.shape[1]) if hasattr(agg_shap, "shape") and len(getattr(agg_shap, "shape", [])) >= 2 else 0
+                    # Sicherstellen, dass wir nicht über verfügbare Spalten hinausgehen
+                    k_eff = min(k, n_cols, len(agg_feats))
+                    if k_eff <= 0:
+                        raise RuntimeError("Aggregierte SHAP-Matrix hat keine Spalten – Mapping prüfen")
+                    for i in range(agg_shap.shape[0]):
+                        shaps = agg_shap[i]
+                        scores = np.abs(np.asarray(shaps))
+                        order = np.argsort(scores)[::-1]
+                        idx_sorted = [int(ix) for ix in order[:k_eff] if 0 <= int(ix) < len(agg_feats)]
+                        top_items = []
+                        for idx in idx_sorted:
+                            s = float(np.asarray(shaps)[..., idx].mean())
+                            feat_name = agg_feats[idx] if idx < len(agg_feats) else f"agg_{idx}"
+                            top_items.append({
+                                "feature": feat_name,
+                                "shap": s,
+                                "sign": "positive" if s >= 0 else "negative",
+                            })
+                        rec = {
+                            "experiment_id": self.experiment_id,
+                            "customer_id": int(df_meta.iloc[i]["Kunde"]) if "Kunde" in df_meta.columns and pd.notna(df_meta.iloc[i]["Kunde"]) else None,
+                            "timebase": int(df_meta.iloc[i]["I_TIMEBASE"]) if "I_TIMEBASE" in df_meta.columns and pd.notna(df_meta.iloc[i]["I_TIMEBASE"]) else None,
+                            "topk": top_items,
+                        }
+                        lines_a.append(json.dumps(rec, ensure_ascii=False))
+                    out_path_la = out_dir / "shap_local_topk_aggregated.jsonl"
+                    out_path_la.write_text("\n".join(lines_a), encoding="utf-8")
+                    self.logger.info(f"💾 Local Top-K (aggregiert): {out_path_la} ({len(lines_a)} Zeilen)")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Aggregiertes Local Top-K übersprungen: {e}")
 
     def _maybe_make_plots(self, out_dir: Path, X: np.ndarray, shap_matrix: np.ndarray, feature_names: List[str]) -> None:
         if not self.cfg.make_plots:
@@ -467,8 +639,10 @@ class ShapService:
         if n == 0:
             raise RuntimeError("Keine Datenzeilen für SHAP-Berechnung gefunden (nach Filterung)")
         sample_n = min(int(self.cfg.sample_size), n)
+        sampled_idx = None  # merke Indizes zur späteren Auswertung (z. B. Digitalization-Gruppen)
         if sample_n < n:
             idx = rng.choice(n, size=sample_n, replace=False)
+            sampled_idx = idx
             df_meta = df_meta.iloc[idx]
             X = X_full[idx]
         else:
@@ -480,6 +654,18 @@ class ShapService:
         # Exporte
         self._export_global_summary(out_dir, ordered_features, shap_matrix)
         self._export_local_topk(out_dir, df_meta.reset_index(drop=True), X, shap_matrix, ordered_features)
+        # Digitalization-Cluster (optional)
+        if self.cfg.cluster_by_digitalization:
+            try:
+                # Für die Clusterbildung benötigen wir die Digitalization-Spalten aus df_cd –
+                # nicht nur die Meta-Spalten. Wähle dazu denselben Zeilenausschnitt wie für X/df_meta.
+                if sampled_idx is not None:
+                    df_for_groups = df_cd.iloc[sampled_idx].reset_index(drop=True)
+                else:
+                    df_for_groups = df_cd.reset_index(drop=True)
+                self._export_global_by_digitalization(out_dir, df_for_groups, ordered_features, shap_matrix)
+            except Exception:
+                pass
         self._maybe_make_plots(out_dir, X, shap_matrix, ordered_features)
 
         # Kurzer Report
@@ -494,10 +680,31 @@ class ShapService:
             self._persist_global_to_jsondb(rows=_rows)
         except Exception:
             pass
+        # Digitalization-Cluster persistieren
+        if self.cfg.cluster_by_digitalization:
+            try:
+                _byd_json = json.loads((out_dir / "shap_global_summary_by_digitalization.json").read_text(encoding="utf-8"))
+                _map = _byd_json.get("global_shap_by_digitalization", {}) if isinstance(_byd_json, dict) else {}
+                self._persist_global_by_digitalization_to_jsondb(_map)
+            except Exception:
+                pass
         try:
             self._persist_local_to_jsondb(out_dir / "shap_local_topk.jsonl")
         except Exception:
             pass
+
+        # Persistenz: Aggregierte Varianten
+        if self.cfg.aggregate_by_raw:
+            try:
+                _global_json_a = json.loads((out_dir / "shap_global_summary_aggregated.json").read_text(encoding="utf-8"))
+                _rows_a = _global_json_a.get("global_shap_aggregated", []) if isinstance(_global_json_a, dict) else []
+                self._persist_global_aggregated_to_jsondb(rows=_rows_a)
+            except Exception:
+                pass
+            try:
+                self._persist_local_aggregated_to_jsondb(out_dir / "shap_local_topk_aggregated.jsonl")
+            except Exception:
+                pass
 
         return out_dir
 
@@ -566,6 +773,94 @@ class ShapService:
                         "I_TIMEBASE": tb,
                         "feature": item.get("feature"),
                         "value": item.get("value"),
+                        "shap": item.get("shap"),
+                        "sign": item.get("sign"),
+                        "rank": rank,
+                        "dt_inserted": _dt.now().isoformat()
+                    })
+        self.db.save()
+
+    def _persist_global_by_digitalization_to_jsondb(self, grp_map: Dict[str, List[Dict[str, Any]]]) -> None:
+        schema = {
+            "experiment_id": {"display_type": "integer"},
+            "digitalization_group": {"display_type": "text"},
+            "feature": {"display_type": "text"},
+            "mean_abs_shap": {"display_type": "decimal"},
+            "mean_shap": {"display_type": "decimal"},
+            "rank": {"display_type": "integer"},
+            "dt_inserted": {"display_type": "datetime"}
+        }
+        self._ensure_table("shap_global_by_digitalization", schema)
+        recs = self.db.data["tables"]["shap_global_by_digitalization"]["records"]
+        from datetime import datetime as _dt
+        for grp, rows in (grp_map or {}).items():
+            if not isinstance(rows, list):
+                continue
+            for r in rows:
+                recs.append({
+                    "experiment_id": int(self.experiment_id),
+                    "digitalization_group": str(grp),
+                    "feature": r.get("feature"),
+                    "mean_abs_shap": r.get("mean_abs_shap"),
+                    "mean_shap": r.get("mean_shap"),
+                    "rank": r.get("rank"),
+                    "dt_inserted": _dt.now().isoformat()
+                })
+        self.db.save()
+
+    def _persist_global_aggregated_to_jsondb(self, rows: List[Dict[str, Any]]) -> None:
+        schema = {
+            "experiment_id": {"display_type": "integer"},
+            "feature": {"display_type": "text"},
+            "mean_abs_shap": {"display_type": "decimal"},
+            "mean_shap": {"display_type": "decimal"},
+            "rank": {"display_type": "integer"},
+            "components": {"display_type": "text"},
+            "dt_inserted": {"display_type": "datetime"}
+        }
+        self._ensure_table("shap_global_aggregated", schema)
+        recs = self.db.data["tables"]["shap_global_aggregated"]["records"]
+        from datetime import datetime as _dt
+        for r in rows:
+            recs.append({
+                "experiment_id": int(self.experiment_id),
+                "feature": r.get("feature"),
+                "mean_abs_shap": r.get("mean_abs_shap"),
+                "mean_shap": r.get("mean_shap"),
+                "rank": r.get("rank"),
+                "components": ",".join(r.get("components", []) if isinstance(r.get("components"), list) else []),
+                "dt_inserted": _dt.now().isoformat()
+            })
+        self.db.save()
+
+    def _persist_local_aggregated_to_jsondb(self, jsonl_path: Path) -> None:
+        schema = {
+            "experiment_id": {"display_type": "integer"},
+            "Kunde": {"display_type": "integer"},
+            "I_TIMEBASE": {"display_type": "integer"},
+            "feature": {"display_type": "text"},
+            "shap": {"display_type": "decimal"},
+            "sign": {"display_type": "text"},
+            "rank": {"display_type": "integer"},
+            "dt_inserted": {"display_type": "datetime"}
+        }
+        self._ensure_table("shap_local_topk_aggregated", schema)
+        recs = self.db.data["tables"]["shap_local_topk_aggregated"]["records"]
+        from datetime import datetime as _dt
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                obj = json.loads(line)
+                cust = obj.get("customer_id")
+                tb = obj.get("timebase")
+                topk = obj.get("topk") or []
+                for rank, item in enumerate(topk, start=1):
+                    recs.append({
+                        "experiment_id": int(self.experiment_id),
+                        "Kunde": cust,
+                        "I_TIMEBASE": tb,
+                        "feature": item.get("feature"),
                         "shap": item.get("shap"),
                         "sign": item.get("sign"),
                         "rank": rank,

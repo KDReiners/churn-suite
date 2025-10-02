@@ -66,6 +66,10 @@ class ProjectPaths:
         return ProjectPaths.project_root() / "bl-counterfactuals"
 
     @staticmethod
+    def bl_shap_directory() -> Path:
+        return ProjectPaths.project_root() / "bl-shap"
+
+    @staticmethod
     def feature_mapping_file() -> Path:
         return ProjectPaths._config_file("feature_mapping.json")
 

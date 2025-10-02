@@ -22,14 +22,94 @@
   }
 
   function renderTablesList(tables) {
-    const list = document.getElementById('tablesList');
-    list.innerHTML = '';
-    tables.forEach(t => {
-      const li = document.createElement('li');
-      li.className = 'list-group-item d-flex justify-content-between align-items-center';
-      li.innerHTML = `<span class="table-link" data-name="${t.table}">${t.table}</span><span class="badge bg-secondary rounded-pill">${t.records}</span>`;
-      li.querySelector('.table-link').addEventListener('click', () => loadSchema(t.table));
-      list.appendChild(li);
+    const container = document.getElementById('tablesContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const order = ['INPUT', 'CHURN', 'COX', 'MLEXPLAIN', 'KPI', 'OTHER'];
+
+    function getCollapseState() {
+      try {
+        return JSON.parse(localStorage.getItem('tablesCollapseState') || '{}') || {};
+      } catch(e) { return {}; }
+    }
+
+    function setCollapseState(cat, isOpen) {
+      try {
+        const s = getCollapseState();
+        s[String(cat)] = !!isOpen;
+        localStorage.setItem('tablesCollapseState', JSON.stringify(s));
+      } catch(e) {}
+    }
+
+    const collapseState = getCollapseState();
+
+    function categorize(name) {
+      const n = String(name || '').toLowerCase();
+      if (['rawdata','files','experiments'].includes(n)) return 'INPUT';
+      if (n.startsWith('cf_')) return 'MLEXPLAIN';
+      if (n.startsWith('cox_') || n.includes('cox')) return 'COX';
+      if (n.startsWith('shap_')) return 'MLEXPLAIN';
+      if (['backtest_results','customer_churn_details','customer_details','customer_churn_details_'].some(prefix => n.startsWith(prefix))) return 'CHURN';
+      if (['experiment_kpis','churn_model_metrics','churn_threshold_metrics','threshold_methods','cox_analysis_metrics'].includes(n)) return 'KPI';
+      return 'OTHER';
+    }
+
+    const grouped = {};
+    order.forEach(cat => grouped[cat] = []);
+    (tables || []).forEach(t => {
+      const cat = categorize(t.table);
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(t);
+    });
+
+    function section(title, key, items) {
+      if (!items || items.length === 0) return '';
+      const secId = `sec-${key.toLowerCase()}`;
+      const isOpen = collapseState[key] !== false; // default: open
+      const lis = items
+        .sort((a,b) => a.table.localeCompare(b.table))
+        .map(t => `<li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="table-link" data-name="${t.table}">${t.table}</span>
+            <span class="badge bg-secondary rounded-pill">${t.records}</span>
+          </li>`)
+        .join('');
+      return `
+        <div class="mb-2">
+          <button class="btn btn-sm btn-light w-100 d-flex justify-content-between align-items-center section-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#${secId}" aria-expanded="${isOpen ? 'true' : 'false'}" aria-controls="${secId}" data-cat="${key}">
+            <span class="fw-bold text-uppercase small text-muted">${title}</span>
+            <span class="badge bg-secondary ms-2">${items.length}</span>
+          </button>
+          <div id="${secId}" class="collapse ${isOpen ? 'show' : ''}" data-cat="${key}">
+            <ul class="list-group list-group-flush mt-1">${lis}</ul>
+          </div>
+        </div>`;
+    }
+
+    const sections = [];
+    sections.push(section('Input', 'INPUT', grouped['INPUT']));
+    sections.push(section('Churn', 'CHURN', grouped['CHURN']));
+    sections.push(section('Cox', 'COX', grouped['COX']));
+    sections.push(section('ML Explain', 'MLEXPLAIN', grouped['MLEXPLAIN']));
+    sections.push(section('KPI', 'KPI', grouped['KPI']));
+    sections.push(section('Weitere', 'OTHER', grouped['OTHER']));
+    container.innerHTML = sections.filter(Boolean).join('');
+
+    // Bind table clicks
+    container.querySelectorAll('.table-link').forEach(el => {
+      el.addEventListener('click', () => loadSchema(el.getAttribute('data-name')));
+    });
+
+    // Persistiere Ein-/Ausklappzustand je Rubrik
+    container.querySelectorAll('.collapse').forEach(el => {
+      el.addEventListener('shown.bs.collapse', () => {
+        const cat = el.getAttribute('data-cat');
+        if (cat) setCollapseState(cat, true);
+      });
+      el.addEventListener('hidden.bs.collapse', () => {
+        const cat = el.getAttribute('data-cat');
+        if (cat) setCollapseState(cat, false);
+      });
     });
   }
 
@@ -74,30 +154,7 @@
     });
   }
 
-  async function loadOutbox() {
-    try {
-      const data = await fetchJSON('/outbox/info');
-      const root = document.getElementById('outboxRoot');
-      const list = document.getElementById('outboxList');
-      if (root) root.textContent = (data.stage0_dir || data.outbox_root || '') + '';
-      if (list) {
-        list.innerHTML = '';
-        (data.files || []).forEach(f => {
-          const li = document.createElement('li');
-          li.className = 'list-group-item d-flex justify-content-between align-items-center';
-          li.innerHTML = `<span class="outbox-file" title="${f.path}">${f.name}</span><span class="badge bg-secondary">${(f.size||0)}</span>`;
-          li.querySelector('.outbox-file').addEventListener('click', () => {
-            const editor = document.getElementById('sqlEditor');
-            editor.value = 'SELECT * FROM files ORDER BY dt_inserted DESC LIMIT 50;';
-            editor.focus();
-          });
-          list.appendChild(li);
-        });
-      }
-    } catch (e) {
-      // Outbox optional – kein harter Fehler
-    }
-  }
+  // Outbox Panel entfernt
 
   function renderSchemaBox(data) {
     const box = document.getElementById('schemaBox');
@@ -241,6 +298,65 @@
     }
   }
 
+  async function showArtifacts() {
+    const editor = document.getElementById('sqlEditor');
+    editor.value = 'SELECT * FROM artifacts_registry ORDER BY registered_at DESC LIMIT 200;';
+    editor.focus();
+    try { await runQuery(); } catch(e) { showError(String(e.message || e)); }
+  }
+
+  async function cleanupArtifacts() {
+    showError('');
+    try {
+      const pw = prompt('Admin-Passwort für Cleanup:');
+      if (!pw) return;
+      const resp = await fetch('/maintenance/cleanup-artifacts', {
+        method: 'POST',
+        headers: { 'X-Admin-Password': pw }
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data && data.error ? data.error : `HTTP ${resp.status}`);
+      }
+      const box = document.getElementById('artifactsStatus');
+      if (box) {
+        box.textContent = `Cleanup OK · kept=${data.kept_count || 0}, deleted=${data.deleted_count || 0}`;
+      }
+      // Nach Cleanup Registry anzeigen
+      try { await showArtifacts(); } catch(e) {}
+      // Tabellenliste neu laden (falls Registry neu angelegt)
+      try { await loadTables(); } catch(e) {}
+    } catch(e) {
+      showError(String(e.message || e));
+    }
+  }
+
+  async function purgeArtifacts() {
+    showError('');
+    try {
+      const pw = prompt('Admin-Passwort für Purge:');
+      if (!pw) return;
+      const resp = await fetch('/maintenance/purge-artifacts', {
+        method: 'POST',
+        headers: { 'X-Admin-Password': pw }
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data && data.error ? data.error : `HTTP ${resp.status}`);
+      }
+      const box = document.getElementById('artifactsStatus');
+      if (box) {
+        box.textContent = `Purge OK · purged=${data.purged_count || 0}, remaining=${data.remaining_count || 0}`;
+      }
+      // Registry neu anzeigen
+      try { await showArtifacts(); } catch(e) {}
+      // Tabellenliste neu laden (falls Registry geleert wurde)
+      try { await loadTables(); } catch(e) {}
+    } catch(e) {
+      showError(String(e.message || e));
+    }
+  }
+
   function bindKeys() {
     const editor = document.getElementById('sqlEditor');
     editor.addEventListener('keydown', function(e) {
@@ -301,18 +417,27 @@
       try { await runQuery(); } catch(e) { showError(String(e.message || e)); }
     });
     document.getElementById('refreshTables').addEventListener('click', loadTables);
-    const btnRO = document.getElementById('refreshOutbox');
-    if (btnRO) btnRO.addEventListener('click', loadOutbox);
     const btnRV = document.getElementById('refreshViews');
     if (btnRV) btnRV.addEventListener('click', loadViews);
     const btnSave = document.getElementById('saveView');
     if (btnSave) btnSave.addEventListener('click', async () => {
       try { await saveViewFromEditor(); } catch(e) { showError(String(e.message || e)); }
     });
+    const btnShowArtifacts = document.getElementById('btnShowArtifacts');
+    if (btnShowArtifacts) btnShowArtifacts.addEventListener('click', async () => {
+      try { await showArtifacts(); } catch(e) { showError(String(e.message || e)); }
+    });
+    const btnCleanupArtifacts = document.getElementById('btnCleanupArtifacts');
+    if (btnCleanupArtifacts) btnCleanupArtifacts.addEventListener('click', async () => {
+      try { await cleanupArtifacts(); } catch(e) { showError(String(e.message || e)); }
+    });
+    const btnPurgeArtifacts = document.getElementById('btnPurgeArtifacts');
+    if (btnPurgeArtifacts) btnPurgeArtifacts.addEventListener('click', async () => {
+      try { await purgeArtifacts(); } catch(e) { showError(String(e.message || e)); }
+    });
     bindKeys();
     loadTables();
     loadViews();
-    loadOutbox();
   }
 
   document.addEventListener('DOMContentLoaded', init);

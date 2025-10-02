@@ -51,7 +51,8 @@ ingest:
 
 cleanDB:
 	@echo "⚠️  WARNING: This will delete ALL data in the database!"
-	@source .venv/bin/activate && python clean_database.py
+	@echo "Views bleiben standardmäßig erhalten. Mit DROP_VIEWS=1 auch Views löschen."
+	@source .venv/bin/activate && CLEANDB_DROP_VIEWS=$(DROP_VIEWS) python clean_database.py $(if $(DROP_VIEWS),--drop-views,)
 
 # --- Git Shortcuts ---
 
